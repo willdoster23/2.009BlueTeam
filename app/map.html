@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blue Team · Brick inspection map</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f5f7;--panel:#fff;--text:#1d2330;--muted:#697386;--line:#d5d9e2;--slot:#eceef3;--accent:#245cce;--ok:#148047;--bad:#c63636;--ok-fill:#edf9f1;--bad-fill:#fff0f0;--missed:#a9aeb7;--frame-line:#c9ced8}
+@media(prefers-color-scheme:dark){:root{--bg:#14171d;--panel:#1c2028;--text:#e7eaf0;--muted:#a2aaba;--line:#384150;--slot:#232833;--accent:#83acff;--ok:#67dfa0;--bad:#ff8a8a;--ok-fill:#143026;--bad-fill:#382020;--missed:#4c535f;--frame-line:#3a4352}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,sans-serif}header{background:var(--panel);border-bottom:1px solid var(--line);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.eyebrow{font-size:12px;color:var(--muted);letter-spacing:.12em}h1{font-size:23px;margin:2px 0 0}h2{font-size:18px;margin:0}p{margin:6px 0 14px;color:var(--muted)}a{color:var(--accent)}main{max-width:1400px;margin:auto;padding:24px}.capture{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(285px,1fr);gap:24px}.camera{background:#000;border-radius:10px;position:relative;overflow:hidden;aspect-ratio:16/9;max-height:350px}video{width:100%;height:100%;object-fit:contain}.overlay{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:#111c;color:#fff;padding:20px;pointer-events:none}.overlay small{display:block;margin-top:10px}.hidden{display:none!important}.form-panel{background:var(--panel);padding:20px;border:1px solid var(--line);border-radius:10px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:flex;flex-direction:column;gap:6px;font-weight:500}input,select,button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 11px}input{width:100%;min-width:0}input[readonly]{background:var(--slot);font-variant-numeric:tabular-nums}button{cursor:pointer}button:hover{filter:brightness(.94)}button:disabled{cursor:default;opacity:.5}button.primary{background:#2f6fed;border-color:#2f6fed;color:#fff}.wide{grid-column:1/-1}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0 0}.status{font-weight:500;color:var(--muted)}.status.live{color:var(--ok)}.status.bad{color:var(--bad)}.hint{font-size:12px}.feedback{font-size:13px;overflow-wrap:anywhere;min-height:38px;margin-top:12px}.countdown{font-size:13px;font-weight:500;margin-top:12px;font-variant-numeric:tabular-nums}.summary{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:24px 0 16px}.count{border-radius:6px;background:var(--panel);border:1px solid var(--line);padding:7px 12px}.good-text{color:var(--ok)}.bad-text{color:var(--bad)}.map-head{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}.tabs{display:flex;gap:6px}button[aria-pressed=true]{background:var(--text);color:var(--panel)}.map-wrap{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:auto;max-height:740px;margin-top:14px;padding:18px}
+.building{display:grid;margin:0 auto;border:3px solid var(--text);background:var(--panel);overflow:hidden;box-sizing:content-box}
+.frame{position:relative;overflow:hidden;min-width:0;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px var(--frame-line)}
+.frame.missed{background:var(--missed)}
+.frame.filled{cursor:pointer}.frame.filled:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.frame.filled::after,.frame.next::before{content:'';position:absolute;inset:0;border:3px solid var(--ok);pointer-events:none;z-index:2}
+.frame.filled.bad::after{border-color:var(--bad)}
+.frame.next::before{border-color:var(--accent);z-index:3;animation:pulse 1.1s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:.3}}@media(prefers-reduced-motion:reduce){.frame.next::before{animation:none}}
+.frame img{width:100%;height:100%;object-fit:cover;display:block}
+.frame .tag{position:absolute;left:4px;bottom:4px;z-index:1;font-size:10px;padding:1px 5px;border-radius:4px;background:#111d;color:#fff}
+.building-caption{text-align:center;font-size:12px;color:var(--muted);margin:10px 0 0;font-variant-numeric:tabular-nums}
+.tile{position:relative;aspect-ratio:1/1;background:var(--slot);border:2px dashed var(--line);border-radius:8px;overflow:hidden;min-width:0;display:flex;align-items:center;justify-content:center}.tile.filled{border:3px solid var(--ok);padding:0;background:var(--ok-fill)}.tile.filled.bad{border-color:var(--bad);background:var(--bad-fill)}.tile img{width:100%;height:100%;object-fit:cover;display:block}.tile .badge,.tile .position,.tile .retakes{position:absolute;z-index:1;font-size:11px;padding:3px 7px;border-radius:5px;background:#111d;color:#fff}.tile .badge{top:6px;left:6px;background:var(--ok);color:var(--panel);font-weight:600}.tile.bad .badge{background:var(--bad)}.tile .position{bottom:6px;left:6px}.tile .retakes{top:6px;right:6px}.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:14px 0}.empty-state{padding:32px;text-align:center;color:var(--muted)}.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}.legend span::before{content:'';display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;vertical-align:-1px;background:var(--ok)}.legend .bad-key::before{background:var(--bad)}.legend .missed-key::before{background:var(--missed)}.legend .empty-key::before{background:transparent;border:1px solid var(--frame-line)}.legend .next-key::before{background:transparent;border:2px solid var(--accent)}details{margin-top:28px;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;color:var(--muted)}.metrics{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.metrics>div{min-width:110px}.metrics span{display:block;font-size:12px;color:var(--muted)}#history{width:100%;height:45px;background:var(--slot)}#events{font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--muted)}dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);max-width:850px;width:calc(100% - 32px);max-height:90vh;overflow:auto;padding:20px}dialog::backdrop{background:#000a}#setupDialog{max-width:520px}.dialog-head{display:flex;justify-content:space-between;gap:12px;align-items:center}#largePhoto{width:100%;max-height:50vh;object-fit:contain;background:#000;border-radius:6px;margin-top:12px}.thumbs{display:flex;gap:8px;overflow:auto;margin-top:12px}.thumbs button{padding:2px;min-width:75px;width:75px}.thumbs img{width:100%;height:55px;object-fit:cover}.dialog-meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.preview{font-size:13px;min-height:40px;margin-top:14px}button.good{border-color:var(--ok);color:var(--ok)}button.bad{border-color:var(--bad);color:var(--bad)}[hidden]{display:none!important}@media(max-width:760px){main{padding:15px}.capture{grid-template-columns:1fr}header{padding:15px}.camera{max-height:280px}.map-head{align-items:flex-start}h1{font-size:20px}.map-wrap{padding:10px}}
+</style></head><body>
+<header><div><div class="eyebrow">2.009 BLUE TEAM · INSPECTION PROTOTYPE</div><h1>Brick photo map</h1></div><div><span id="status" class="status" role="status">Connecting…</span> · <a href="/">Bridge test viewer</a></div></header>
+<main>
+<section class="capture" aria-label="Capture and position">
+<div><div class="camera"><video id="video" autoplay muted playsinline controls></video><div id="overlay" class="overlay"><div id="message">Connecting…</div><small id="detail">Waiting for the bridge camera.</small></div></div><p id="linkStatus" class="hint" role="status">Checking bridge…</p><button id="resume" hidden>Resume video</button></div>
+<div class="form-panel"><h2>Building scan</h2><p class="hint">While mapping runs, a photo is taken every 5 seconds and placed in the frame at the scanner's X, Y position. Every frame the scanner moves across without a photo (no signal or no capture) turns grey.</p>
+<div class="fields"><label>X position (m, from left)<input id="encoderX" readonly value="0.00" aria-describedby="encoderNote"></label><label>Y position (m, from top)<input id="encoderY" readonly value="0.00" aria-describedby="encoderNote"></label><p id="encoderNote" class="hint wide" style="margin:-6px 0 0">Simulated encoder · Y moves down 1 m/s · at the bottom it returns to the top and X moves right by one camera width</p><label class="wide">Label new photos as<select id="brickStatus"><option value="good">Good · green</option><option value="bad">Bad · red</option></select></label></div>
+<div class="actions"><button id="runMap" class="primary" disabled>Start mapping</button><button id="photo" disabled>Capture now</button><button id="start">Reconnect video</button><button id="newMap">New building…</button></div>
+<div id="countdown" class="countdown" role="status"></div>
+<div id="photoStatus" class="feedback" role="status"></div><p class="hint">Each photo saves inside this folder and also to Desktop when available, along with its X, Y position, frame and label.</p></div>
+</section>
+<section aria-label="Inspection map">
+<div class="summary" aria-live="polite"><span class="count"><strong id="positionCount">0 / 0</strong> frames scanned</span><span class="count"><strong id="totalCount">0</strong> photos</span><span class="count"><strong id="missedCount">0</strong> no picture</span><span class="count good-text"><strong id="goodCount">0</strong> good</span><span class="count bad-text"><strong id="badCount">0</strong> bad</span><button id="exportMap">Export map data</button></div>
+<div class="map-head"><div><h2>Building map</h2><p id="mapHint" class="hint">Set the building size to draw the map.</p></div><div class="tabs" aria-label="Map view"><button id="mapTab" aria-pressed="true">Building</button><button id="galleryTab" aria-pressed="false">All photos</button></div></div>
+<div id="mapState" role="status" class="hint"></div>
+<div id="mapWrap" class="map-wrap"><div id="building" class="building" aria-label="Building wall photo frames"></div><p id="buildingCaption" class="building-caption"></p></div><div id="gallery" class="gallery" hidden></div>
+<div class="legend"><span>Good</span><span class="bad-key">Bad</span><span class="missed-key">Scanned, no picture</span><span class="next-key">Scanner is here</span><span class="empty-key">Not scanned yet</span></div><p class="hint">The outline is drawn to scale, with X = 0 at the left edge and Y = 0 at the top. Each square frame covers about 3 × 3 bricks; frames at the right and bottom edges may extend past the building and are cut off.</p>
+</section>
+<details><summary>Connection diagnostics</summary><div class="actions"><label>Pi Ethernet IP<input id="ip" value="192.168.2.3"></label><button id="stop">Stop video</button><button id="export">Save connection log</button></div><div class="metrics"><div><span>Received video</span><strong id="rate">—</strong></div><div><span>Frames / sec</span><strong id="fps">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div><div><span>Last frame</span><strong id="age">—</strong></div><div><span>Interruptions</span><strong id="drops">0</strong></div><div><span>Interrupted time</span><strong id="downtime">0 s</strong></div></div><p id="route" class="hint">Bridge Ethernet only</p><canvas id="history" aria-label="Video availability timeline"></canvas><div id="events" aria-label="Connection event log"></div></details>
+</main>
+<dialog id="setupDialog"><form id="setupForm"><div class="dialog-head"><h2>Building size</h2></div><p class="hint">Enter the approximate size of the wall to scan. The map draws it as a rectangle and splits it into square photo frames.</p>
+<div class="fields"><label>Width (m)<input id="bWidth" type="number" step="any" min="0.1" max="1000" value="10" required></label><label>Height (m)<input id="bHeight" type="number" step="any" min="0.1" max="1000" value="6" required></label><label class="wide">Camera capture width = frame size (m)<input id="frameSize" type="number" step="any" min="0.05" max="10" required></label></div>
+<p class="hint">Default 0.61 m = 3 standard bricks across (3 × 8 in, mortar included). After each vertical strip the scanner moves right by exactly this width, so photos don't overlap. Set it to what your camera actually covers (e.g. 0.7 m).</p>
+<div id="setupPreview" class="preview" role="status"></div>
+<div class="actions"><button type="submit" class="primary">Create map</button><button type="button" id="setupCancel">Cancel</button></div></form></dialog>
+<dialog id="photoDialog"><div class="dialog-head"><h2 id="dialogTitle">Brick photo</h2><button id="closeDialog" aria-label="Close photo">Close</button></div><img id="largePhoto" alt="Selected brick capture"><p id="dialogMeta" class="dialog-meta"></p><div class="actions"><button id="markGood" class="good">Mark good · green</button><button id="markBad" class="bad">Mark bad · red</button></div><div id="retakes" class="thumbs" aria-label="All photos in this frame"></div><p id="dialogStatus" class="hint" role="status"></p></dialog>
+<script src="/player.js"></script>
+<script>
+(()=>{
+const el=id=>document.getElementById(id),token='__PHOTO_TOKEN__';
+const TICK_MS=5000;                               // one photo every 5 s (until captures are encoder-triggered)
+const BRICK_LENGTH_M=0.2032;                      // US modular brick incl. 3/8 in mortar joint = 8 in
+const DEFAULT_FRAME_M=+(3*BRICK_LENGTH_M).toFixed(2); // one photo covers 3 bricks across
+let photos=[],session=null,passed=new Set(),latest=new Map(),loaded=false,selectedId=null,galleryMode=false,polling=false,version=0;
+let running=false,tickBusy=false,nextTickAt=0,scanner={x:0,y:0},scannerSlot=null;
+let frameEls=[],showTags=false,countsDirty=true,cov=null,pending=new Set(),flushBusy=false,lastFlush=0;
+const format=n=>Number(n).toString(),metres=n=>Number(n).toFixed(2)+' m';
+const total=()=>session?session.cols*session.rows:0;
+const finished=()=>!!session&&!!session.finished;
+const rowOf=s=>Math.floor(s/session.cols),colOf=s=>s%session.cols;
+const where=s=>`row ${rowOf(s)+1}, column ${colOf(s)+1}`;
+const inSession=p=>!!session&&p.session_id===session.id&&p.slot!=null;
+const say=text=>{el('photoStatus').textContent=text;};
+async function post(url,body){
+ const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Photo-Token':token},body:JSON.stringify(body)});
+ const data=await r.json();if(!r.ok){const e=new Error(data.error||'Request failed');e.status=r.status;throw e;}return data;
+}
+// The frame containing (x, y) in metres; null when outside the drawn map. Same rule as slot_for() in server.py.
+function slotAt(x,y){
+ if(!session)return null;const f=session.frame_m,eps=1e-9;
+ if(!(x>=-eps&&x<=session.cols*f+eps&&y>=-eps&&y<=session.rows*f+eps))return null;
+ // +1e-9 so a strip edge such as 3 × 0.61 m lands in column 4, not column 3, despite rounding
+ return Math.min(Math.max(Math.floor(y/f+1e-9),0),session.rows-1)*session.cols+Math.min(Math.max(Math.floor(x/f+1e-9),0),session.cols-1);
+}
+
+/* ================= ENCODER INPUT =================
+   readEncoder() is the single place the map reads the scanner position from.
+   Return {x, y, source} in metres: x = distance from the left edge, y = distance down from the top.
+   Every photo is placed in the frame at that position, and every frame the position moves across
+   without a photo turns grey. To connect the real encoder, replace the body, for example:
+     const r = await fetch('/api/encoder', {cache: 'no-store'});
+     const {x, y} = await r.json();
+     return {x, y, source: 'encoder'};
+   (and delete the simulation below). Until then this is a constant-speed simulation that scans
+   in vertical strips: Y moves down at 1 m/s while mapping runs; at the bottom it returns to the top
+   and X moves right by one camera width (the frame size, e.g. 0.61 m), so strips never overlap. */
+const ENCODER_SIM={ySpeedMps:1};                   // X step is always session.frame_m (camera capture width)
+let simStripMs=0,simSince=null,simX=0;
+function simClock(on){
+ if(on&&simSince===null)simSince=performance.now();
+ if(!on&&simSince!==null){simStripMs+=performance.now()-simSince;simSince=null;}
+}
+function simSet(x,y){simStripMs=y/ENCODER_SIM.ySpeedMps*1000;simX=x;if(simSince!==null)simSince=performance.now();}
+async function readEncoder(){
+ let y=ENCODER_SIM.ySpeedMps*(simStripMs+(simSince===null?0:performance.now()-simSince))/1000;
+ if(session&&y>=session.height_m){simSet(simX+session.frame_m,0);y=0;}   // end of strip: back to the top, one camera width right
+ return {x:simX,y,source:'simulated'};
+}
+/* ================================================= */
+
+// Coverage: which frames the scanner has moved across. Within the current column (strip), a frame is
+// marked once the scanner has travelled its whole height, or when the scanner leaves the strip after touching it.
+function markPassed(s){if(s!=null&&!passed.has(s)){passed.add(s);pending.add(s);countsDirty=true;paint(s);}}
+function markStrip(c,fullOnly){
+ const f=session.frame_m,eps=1e-6;
+ for(let row=0;row<session.rows;row++){
+  const top=row*f,bottom=Math.min((row+1)*f,session.height_m);
+  if(fullOnly?(top>=c.lo-eps&&bottom<=c.hi+eps):(bottom>c.lo-eps&&top<=c.hi+eps))markPassed(row*session.cols+c.col);
+ }
+}
+function track(pos){
+ const s=slotAt(pos.x,pos.y);
+ if(s===null){if(cov){markStrip(cov,false);cov=null;}return;}
+ const col=colOf(s);
+ if(cov&&cov.col!==col){markStrip(cov,false);cov=null;}
+ if(!cov)cov={col,lo:pos.y,hi:pos.y};
+ cov.lo=Math.min(cov.lo,pos.y);cov.hi=Math.max(cov.hi,pos.y);
+ markStrip(cov,true);
+}
+function moveScanner(pos){
+ scanner=pos;el('encoderX').value=pos.x.toFixed(2);el('encoderY').value=pos.y.toFixed(2);
+ const s=finished()?null:slotAt(pos.x,pos.y);
+ if(s!==scannerSlot){const old=scannerSlot;scannerSlot=s;if(old!=null)paint(old);if(s!=null)paint(s);}
+}
+async function flush(force=false){
+ if(!session||flushBusy)return;
+ if(!force&&(performance.now()-lastFlush<1000))return;
+ flushBusy=true;lastFlush=performance.now();const sent=[...pending];pending.clear();const id=session.id;
+ try{const s=await post('/api/session/progress',{session_id:id,x:scanner.x,y:scanner.y,passed:sent,finished:finished()});
+  if(session&&session.id===id){session.scan_x=s.scan_x;session.scan_y=s.scan_y;}}
+ catch(error){if(session&&session.id===id)for(const s of sent)pending.add(s);el('mapState').textContent='Scan progress not saved yet: '+error.message+' · retrying';}
+ finally{flushBusy=false;}
+}
+function finishScan(){
+ if(cov){markStrip(cov,false);cov=null;}
+ for(let s=0;s<total();s++)markPassed(s);       // anything never reached is also "no picture"
+ session.finished=1;setRunning(false);moveScanner(scanner);flush(true);
+ say('Scan complete: the scanner reached the right edge of the building.');
+}
+
+function tile(p,count=1){
+ const button=document.createElement('button');button.type='button';button.className='tile filled '+p.status;
+ const pos=p.position_source==='manual'?`X ${format(p.x)} · Y ${format(p.y)}`:`X ${metres(p.x)} · Y ${metres(p.y)}`;
+ button.setAttribute('aria-label',`${p.status} brick at ${pos}, ${count} photo${count===1?'':'s'}`);
+ const img=document.createElement('img');img.src=p.url;img.loading='lazy';img.alt=`Brick at ${pos}`;
+ button.append(img);
+ for(const [cls,text] of [['badge',p.status==='good'?'GOOD':'BAD'],['position',pos],...(count>1?[['retakes',`${count} photos`]]:[])]){const span=document.createElement('span');span.className=cls;span.textContent=text;button.append(span);}
+ button.onclick=()=>openPhoto(p.id);return button;
+}
+function rebuildLatest(){latest=new Map();for(const p of photos)if(inSession(p))latest.set(p.slot,p);countsDirty=true;}
+function paint(s){
+ const f=frameEls[s];if(!f)return;
+ const p=latest.get(s),grey=!p&&(passed.has(s)||finished()),here=s===scannerSlot;
+ f.className='frame'+(p?' filled '+p.status:'')+(grey?' missed':'')+(here?' next':'');
+ const state=p?`${p.status.toUpperCase()} photo at X ${metres(p.x)}, Y ${metres(p.y)}`:grey?'scanned, no picture':'not scanned yet';
+ f.title=`${where(s)} · ${state}${here?' · scanner is here':''}`;f.setAttribute('aria-label',f.title);
+ const shown=f.dataset.photo||'';
+ if((p?p.id:'')!==shown){
+  f.replaceChildren();f.dataset.photo=p?p.id:'';
+  if(p){
+   const img=document.createElement('img');img.src=p.url;img.loading='lazy';img.alt='';f.append(img);
+   if(showTags){const t=document.createElement('span');t.className='tag';t.textContent=`R${rowOf(s)+1} C${colOf(s)+1}`;f.append(t);}
+  }
+ }
+ if(p){f.tabIndex=0;f.setAttribute('role','button');f.onclick=()=>openPhoto(p.id);f.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPhoto(p.id);}};}
+ else{f.removeAttribute('tabindex');f.removeAttribute('role');f.onclick=f.onkeydown=null;}
+}
+function renderBuilding(){
+ const b=el('building');b.replaceChildren();frameEls=[];
+ if(!session){b.hidden=true;el('buildingCaption').textContent='No building yet. Press “New building…” and enter its width and height.';return;}
+ b.hidden=false;
+ const avail=Math.max(200,el('mapWrap').clientWidth-40),maxH=620;
+ let scale=Math.min(avail/session.width_m,maxH/session.height_m);
+ scale=Math.max(scale,24/session.frame_m);                      // keep frames at least 24 px; scroll if needed
+ const px=session.frame_m*scale;showTags=px>=72;
+ b.style.width=session.width_m*scale+'px';b.style.height=session.height_m*scale+'px';
+ b.style.gridTemplateColumns=`repeat(${session.cols},${px}px)`;b.style.gridAutoRows=px+'px';
+ const frag=document.createDocumentFragment();
+ for(let s=0;s<total();s++){const f=document.createElement('div');frameEls.push(f);frag.append(f);paint(s);}
+ b.append(frag);
+ el('buildingCaption').textContent=`${metres(session.width_m)} wide × ${metres(session.height_m)} high · X → right, Y ↓ down`;
+}
+function updateCounts(){
+ countsDirty=false;
+ const mine=photos.filter(inSession),scanned=finished()?total():new Set([...passed,...latest.keys()]).size;
+ el('positionCount').textContent=`${scanned} / ${total()}`;el('totalCount').textContent=mine.length;
+ el('missedCount').textContent=finished()?total()-latest.size:[...passed].filter(s=>!latest.has(s)).length;
+ el('goodCount').textContent=mine.filter(p=>p.status==='good').length;el('badCount').textContent=mine.filter(p=>p.status==='bad').length;
+}
+function render(){
+ rebuildLatest();updateCounts();
+ el('mapHint').textContent=session?`${session.cols} × ${session.rows} frames of ${metres(session.frame_m)} (≈ 3 × 3 bricks) · each photo goes in the frame at its X, Y position`:'Set the building size to draw the map.';
+ el('mapWrap').hidden=galleryMode;el('gallery').hidden=!galleryMode;
+ el('mapTab').setAttribute('aria-pressed',String(!galleryMode));el('galleryTab').setAttribute('aria-pressed',String(galleryMode));
+ el('gallery').replaceChildren();
+ if(galleryMode){
+  if(!photos.length){const empty=document.createElement('div');empty.className='empty-state';empty.textContent='No brick photos yet.';el('gallery').append(empty);}
+  for(const p of [...photos].reverse())el('gallery').append(tile(p));
+ }else renderBuilding();
+ updateControls();
+}
+function updateControls(){
+ el('runMap').disabled=!session||finished();
+ el('runMap').textContent=running?'Pause mapping':session&&(session.scan_x>0||session.scan_y>0||passed.size)&&!finished()?'Resume mapping':'Start mapping';
+}
+function setRunning(on){
+ if(on&&(!session||finished()))on=false;
+ running=on;simClock(on);
+ if(on)nextTickAt=performance.now();               // first photo right away, then every 5 s
+ else flush(true);
+ updateControls();
+}
+// Take one photo at the current encoder position. The server files it in the frame at that X, Y.
+async function tick(pos){
+ if(tickBusy||!session)return;
+ tickBusy=true;nextTickAt=performance.now()+TICK_MS;
+ const s=slotAt(pos.x,pos.y),here=`X ${metres(pos.x)}, Y ${metres(pos.y)}${s!=null?` (${where(s)})`:''}`;
+ try{
+  const result=await window.captureFrame({'X-Encoder-X':String(pos.x),'X-Encoder-Y':String(pos.y),'X-Position-Source':pos.source,
+   'X-Brick-Status':el('brickStatus').value,'X-Map-Session':session.id});
+  const p=result.record;photos.push(p);version++;
+  if(inSession(p)){latest.set(p.slot,p);countsDirty=true;paint(p.slot);}
+  say(p.slot==null?`Photo saved at ${here}, but that is outside the building map (see All photos).`
+   :`Photo placed at ${here} · ${p.status.toUpperCase()}${result.desktop_saved===false?' · Desktop copy unavailable':''}`);
+ }catch(error){
+  markPassed(s);                                   // no signal / no photo: this frame shows grey
+  say(`No picture at ${here}: ${error.message}. Frame left grey.`);
+ }finally{tickBusy=false;}
+}
+window.onPhotoButton=()=>{
+ if(!session){openSetup();return;}
+ if(finished()){say('This building is fully scanned. Start a new building to take more.');return;}
+ tick(scanner);
+};
+el('runMap').onclick=()=>setRunning(!running);
+let loopBusy=false;
+setInterval(async()=>{
+ if(loopBusy)return;loopBusy=true;
+ try{
+  if(!session){el('countdown').textContent='Set the building size to begin.';return;}
+  const pos=await readEncoder();moveScanner(pos);
+  if(running){
+   if(pos.x>=session.width_m-1e-9)finishScan();
+   else{track(pos);if(!tickBusy&&performance.now()>=nextTickAt)tick(pos);flush();}
+  }
+  if(countsDirty)updateCounts();
+  const s=slotAt(pos.x,pos.y),at=`X ${metres(pos.x)}, Y ${metres(pos.y)}${s!=null?` (${where(s)})`:''}`;
+  el('countdown').textContent=finished()?'Scan complete.':running?(tickBusy?`Capturing at ${at}…`:`Scanner at ${at} · next photo in ${Math.max(1,Math.ceil((nextTickAt-performance.now())/1000))} s`):`Paused · scanner at ${at}`;
+ }finally{loopBusy=false;}
+},200);
+
+function duration(sec){const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=Math.round(sec%60);return h?`${h} h ${m} min`:m?`${m} min ${s} s`:`${s} s`;}
+function readSetup(){const w=+el('bWidth').value,h=+el('bHeight').value,f=+el('frameSize').value;return {w,h,f,ok:w>=0.1&&w<=1000&&h>=0.1&&h<=1000&&f>=0.05&&f<=10};}
+function updatePreview(){
+ const s=readSetup();
+ if(!s.ok){el('setupPreview').textContent='Enter a width and height between 0.1 and 1000 m and a frame size between 0.05 and 10 m.';return;}
+ const c=Math.ceil(s.w/s.f-1e-9),r=Math.ceil(s.h/s.f-1e-9),n=c*r;
+ el('setupPreview').textContent=n>20000?`${n} frames is too many (limit 20,000). Use a larger frame size.`
+  :`${c} columns × ${r} rows = ${n} frames · simulated scan: ${c} vertical strips, about ${duration(c*s.h/ENCODER_SIM.ySpeedMps)}.`;
+}
+function openSetup(){
+ setRunning(false);
+ el('bWidth').value=session?session.width_m:10;el('bHeight').value=session?session.height_m:6;el('frameSize').value=session?session.frame_m:DEFAULT_FRAME_M;
+ el('setupCancel').hidden=!session;updatePreview();el('setupDialog').showModal();
+}
+function adoptSession(s){
+ session=s;passed=new Set(s?s.passed:[]);pending=new Set();cov=null;scannerSlot=null;
+ simClock(false);simSet(s?s.scan_x:0,s?s.scan_y:0);scanner={x:s?s.scan_x:0,y:s?s.scan_y:0};
+}
+for(const id of ['bWidth','bHeight','frameSize'])el(id).addEventListener('input',updatePreview);
+el('setupDialog').addEventListener('cancel',e=>{if(!session)e.preventDefault();});
+el('setupCancel').onclick=()=>el('setupDialog').close();
+el('setupForm').onsubmit=async e=>{
+ e.preventDefault();const s=readSetup();if(!s.ok){updatePreview();return;}
+ try{
+  const created=await post('/api/session',{width_m:s.w,height_m:s.h,frame_m:s.f});version++;
+  setRunning(false);adoptSession(created);el('setupDialog').close();render();moveScanner(scanner);
+  say('New building map ready. Press Start mapping.');
+ }catch(error){el('setupPreview').textContent=error.message;}
+};
+el('newMap').onclick=openSetup;
+let resizeTimer=null;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(!galleryMode)renderBuilding();},150);});
+
+async function load(){
+ if(polling)return;polling=true;const v=version;
+ try{
+  const [pr,sr]=await Promise.all([fetch('/api/photos',{cache:'no-store'}),fetch('/api/session',{cache:'no-store'})]);
+  if(!pr.ok||!sr.ok)throw new Error('Could not load saved map (restart the app if it was just updated)');
+  const list=await pr.json(),s=(await sr.json()).session;
+  if(v!==version)return;                           // a photo arrived meanwhile; the next poll catches up
+  const first=!loaded;loaded=true;
+  if(!s||!session||s.id!==session.id){adoptSession(s);photos=list;render();moveScanner(scanner);}
+  else{
+   let changed=JSON.stringify(list)!==JSON.stringify(photos);photos=list;
+   for(const slot of s.passed)if(!passed.has(slot)){passed.add(slot);changed=true;}
+   if(s.finished&&!session.finished){session.finished=1;setRunning(false);changed=true;}
+   if(changed)render();
+  }
+  if(first&&!session)openSetup();
+  el('mapState').textContent='';
+ }catch(error){el('mapState').textContent=error.message+' · retrying';}finally{polling=false;}
+}
+function showSelected(){
+ const p=photos.find(p=>p.id===selectedId);if(!p)return;
+ const mapped=inSession(p),manual=p.position_source==='manual';
+ el('dialogTitle').textContent=`${mapped?`Row ${rowOf(p.slot)+1} · Column ${colOf(p.slot)+1}`:manual?`X ${format(p.x)} · Y ${format(p.y)}`:`X ${metres(p.x)} · Y ${metres(p.y)}`} · ${p.status.toUpperCase()}`;
+ el('largePhoto').src=p.url;
+ const source=manual?`Manual position X ${format(p.x)}, Y ${format(p.y)}`:`${p.position_source==='simulated'?'Simulated encoder':'Encoder'} X ${metres(p.x)}, Y ${metres(p.y)}`;
+ el('dialogMeta').textContent=`${new Date(p.captured_at).toLocaleString()} · ${p.width} × ${p.height} · ${source} · ${p.name}`;
+ el('markGood').setAttribute('aria-pressed',String(p.status==='good'));el('markBad').setAttribute('aria-pressed',String(p.status==='bad'));
+ el('retakes').replaceChildren();
+ const list=photos.filter(o=>p.slot!=null?(o.session_id===p.session_id&&o.slot===p.slot):(o.slot==null&&o.x===p.x&&o.y===p.y));
+ if(list.length>1)for(const item of list){const b=document.createElement('button');b.setAttribute('aria-label',`${item.status} capture at ${new Date(item.captured_at).toLocaleTimeString()}`);b.setAttribute('aria-pressed',String(item.id===p.id));const img=document.createElement('img');img.src=item.url;img.alt=item.status;b.append(img);b.onclick=()=>{selectedId=item.id;showSelected();};el('retakes').append(b);}
+}
+function openPhoto(id){selectedId=id;el('dialogStatus').textContent='';showSelected();el('photoDialog').showModal();}
+async function mark(status){
+ const id=selectedId;el('markGood').disabled=el('markBad').disabled=true;
+ try{const result=await post(`/api/photos/${id}/status`,{status});version++;photos=photos.map(p=>p.id===id?result:p);render();showSelected();el('dialogStatus').textContent='Label saved.';}
+ catch(error){el('dialogStatus').textContent=error.message;}finally{el('markGood').disabled=el('markBad').disabled=false;}
+}
+el('markGood').onclick=()=>mark('good');el('markBad').onclick=()=>mark('bad');el('closeDialog').onclick=()=>el('photoDialog').close();
+el('photoDialog').onclick=event=>{if(event.target===el('photoDialog'))el('photoDialog').close();};
+el('mapTab').onclick=()=>{galleryMode=false;render();};el('galleryTab').onclick=()=>{galleryMode=true;render();};
+el('exportMap').onclick=async()=>{
+ try{const r=await fetch('/api/photos/export');if(!r.ok)throw new Error('Export failed');const data=await r.json();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='brick-map-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}catch(error){el('mapState').textContent=error.message;}
+};
+load();setInterval(load,5000);
+})();
+</script></body></html>
