@@ -1,3 +1,6 @@
+The current Ethernet dashboard runs on the rooftop Pi. See pi-hosted/README.md.
+The instructions below are for the earlier local Mac package.
+
 BLUE TEAM BRICK MAPPER — MAC PACKAGE
 
 START

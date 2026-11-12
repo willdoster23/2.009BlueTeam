@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blue Team · Bridge range test</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#10151b;color:#eaf0f7}*{box-sizing:border-box}body{max-width:1100px;margin:auto;padding:28px}header{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}h1{font-size:26px;margin:0}p{color:#aebdcb;line-height:1.5}.tag{color:#8ac8ff}.screen{position:relative;margin:22px 0;background:#000;border-radius:14px;overflow:hidden;aspect-ratio:16/9;max-height:50vh}video{width:100%;height:100%;object-fit:contain}.overlay{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:#10151be6;font-size:27px;pointer-events:none}.overlay small{display:block;font-size:16px;color:#b4c5d5;margin-top:12px}.hidden{display:none}.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}.metric{background:#1a242e;padding:17px;border-radius:10px}.metric span{display:block;color:#afbfce;font-size:13px}.metric strong{display:block;font-size:25px;margin-top:8px;font-variant-numeric:tabular-nums}button,input{font:inherit;border:1px solid #4e6172;padding:10px 13px;border-radius:7px;background:#182735;color:inherit}button{cursor:pointer}button:hover{background:#28435a}label{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controls{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}input{max-width:100%;width:190px}.status{font-size:18px;color:#ffd382}.status.live{color:#81dfac}.status.bad{color:#ff9d9d}canvas{display:block;width:100%;height:90px;margin-top:12px;background:#18212b;border-radius:8px}#events{max-height:140px;overflow:auto;font:13px/1.6 ui-monospace,monospace;color:#b4c5d5;white-space:pre-wrap}.note{font-size:13px}.bottom{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}a{color:#8ac8ff}@media(max-width:550px){body{padding:15px}h1{font-size:22px}.overlay{font-size:20px}.metric strong{font-size:21px}}
+</style></head><body>
+<header><div><div class="tag">2.009 BLUE TEAM</div><h1>Wireless bridge · Live range test</h1><p><a href="/map.html">Open brick inspection map →</a></p></div><div id="status" class="status" role="status">Ready</div></header>
+<div class="controls"><button id="start">Start / reconnect</button><button id="stop">Stop</button><button id="photo" disabled>Take photo</button><button id="resume" hidden>Resume video</button><button id="export">Save test log</button></div>
+<p id="photoStatus" class="note" role="status"></p><p id="linkStatus" class="note" role="status">Checking bridge reachability…</p><div class="screen"><video id="video" autoplay muted playsinline controls></video><div id="overlay" class="overlay"><div id="message">Connecting…</div><small id="detail">Retries automatically while this page is open.</small></div></div>
+<div class="metrics">
+<div class="metric"><span>Received video</span><strong id="rate">—</strong></div>
+<div class="metric"><span>Decoded frames / sec</span><strong id="fps">—</strong></div>
+<div class="metric"><span>Packet loss · last sample</span><strong id="loss">—</strong></div>
+<div class="metric"><span>Last decoded frame</span><strong id="age">—</strong></div>
+<div class="metric"><span>Video interruptions</span><strong id="drops">0</strong></div>
+<div class="metric"><span>Total interrupted time</span><strong id="downtime">0.0 s</strong></div>
+</div>
+<p class="note">These are measured video-delivery metrics, not radio signal strength. Green = decoded frames arriving; amber = connecting; red = no new frame for over 2 seconds. Retries start after 2.5 seconds without frames. Keep this tab visible during the test.</p>
+<div class="bottom"><span>Last 90 seconds · green: live, red: interrupted, amber: connecting, gray: stopped</span><span id="route">Bridge Ethernet only · 192.168.2.3</span></div>
+<canvas id="history" aria-label="Recent video availability timeline"></canvas>
+<p class="note">Media candidates are restricted to the Ethernet IP above, so the player cannot silently switch to MIT Wi-Fi. Bitrate is traffic received, not the bridge's maximum capacity.</p>
+<div id="events" aria-label="Connection event log"></div>
+<script src="/storage.js"></script>
+<script src="/player.js"></script></body></html>

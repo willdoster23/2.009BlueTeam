@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blue Team · Inspection control</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f5f7;--panel:#fff;--text:#1d2330;--muted:#697386;--line:#d5d9e2;--slot:#eceef3;--accent:#245cce;--ok:#148047;--bad:#c63636;--ok-fill:#edf9f1;--bad-fill:#fff0f0}
+@media(prefers-color-scheme:dark){:root{--bg:#14171d;--panel:#1c2028;--text:#e7eaf0;--muted:#a2aaba;--line:#384150;--slot:#232833;--accent:#83acff;--ok:#67dfa0;--bad:#ff8a8a;--ok-fill:#143026;--bad-fill:#382020}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,sans-serif}header{background:var(--panel);border-bottom:1px solid var(--line);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.eyebrow{font-size:12px;color:var(--muted);letter-spacing:.12em}h1{font-size:23px;margin:2px 0 0}h2{font-size:18px;margin:0}p{margin:6px 0 14px;color:var(--muted)}a{color:var(--accent)}main{max-width:1400px;margin:auto;padding:24px}.capture{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(285px,1fr);gap:24px}.camera{background:#000;border-radius:10px;position:relative;overflow:hidden;aspect-ratio:16/9;max-height:350px}video{width:100%;height:100%;object-fit:contain}.overlay{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:#111c;color:#fff;padding:20px;pointer-events:none}.overlay small{display:block;margin-top:10px}.hidden{display:none!important}.form-panel{background:var(--panel);padding:20px;border:1px solid var(--line);border-radius:10px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:flex;flex-direction:column;gap:6px;font-weight:500}input,select,button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 11px}input{width:100%;min-width:0}button{cursor:pointer}button:hover{filter:brightness(.94)}button:disabled{cursor:default;opacity:.5}button.primary{background:#2f6fed;border-color:#2f6fed;color:#fff}.wide{grid-column:1/-1}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0 0}.status{font-weight:500;color:var(--muted)}.status.live{color:var(--ok)}.status.bad{color:var(--bad)}.hint{font-size:12px}.feedback{font-size:13px;overflow-wrap:anywhere;min-height:38px;margin-top:12px}.summary{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:24px 0 16px}.count{border-radius:6px;background:var(--panel);border:1px solid var(--line);padding:7px 12px}.good-text{color:var(--ok)}.bad-text{color:var(--bad)}.map-head{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}.tabs{display:flex;gap:6px}button[aria-pressed=true]{background:var(--text);color:var(--panel)}.map-wrap{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:auto;max-height:740px;margin-top:14px}.map-grid{display:grid;gap:10px;padding:14px;min-width:100%;width:max-content}.axis{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}.corner{font-weight:600}.tile{position:relative;aspect-ratio:1/1;background:var(--slot);border:2px dashed var(--line);border-radius:8px;overflow:hidden;min-width:0;display:flex;align-items:center;justify-content:center}.tile.filled{border:3px solid var(--ok);padding:0;background:var(--ok-fill)}.tile.filled.bad{border-color:var(--bad);background:var(--bad-fill)}.tile img{width:100%;height:100%;object-fit:cover;display:block}.tile .badge,.tile .position,.tile .retakes{position:absolute;z-index:1;font-size:11px;padding:3px 7px;border-radius:5px;background:#111d;color:#fff}.tile .badge{top:6px;left:6px;background:var(--ok);color:var(--panel);font-weight:600}.tile.bad .badge{background:var(--bad)}.tile .position{bottom:6px;left:6px}.tile .retakes{top:6px;right:6px}.tile.empty{color:var(--muted);font-size:12px}.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:14px 0}.empty-state{padding:32px;text-align:center;color:var(--muted)}.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}.legend span::before{content:'';display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;background:var(--ok)}.legend .bad-key::before{background:var(--bad)}.legend .empty-key::before{background:var(--slot);border:1px dashed var(--line)}details{margin-top:28px;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;color:var(--muted)}.metrics{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.metrics>div{min-width:110px}.metrics span{display:block;font-size:12px;color:var(--muted)}#history{width:100%;height:45px;background:var(--slot)}#events{font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--muted)}dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);max-width:850px;width:calc(100% - 32px);max-height:90vh;overflow:auto;padding:20px}dialog::backdrop{background:#000a}.dialog-head{display:flex;justify-content:space-between;gap:12px;align-items:center}#largePhoto{width:100%;max-height:50vh;object-fit:contain;background:#000;border-radius:6px;margin-top:12px}.thumbs{display:flex;gap:8px;overflow:auto;margin-top:12px}.thumbs button{padding:2px;min-width:75px;width:75px}.thumbs img{width:100%;height:55px;object-fit:cover}.dialog-meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}button.good{border-color:var(--ok);color:var(--ok)}button.bad{border-color:var(--bad);color:var(--bad)}[hidden]{display:none!important}@media(max-width:760px){main{padding:15px}.capture{grid-template-columns:1fr}header{padding:15px}.camera{max-height:280px}.map-head{align-items:flex-start}h1{font-size:20px}}
+</style>
+<style>
+.system-status{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}.system-status span{padding:6px 10px;border:1px solid var(--line);border-radius:20px}.system-status .online{color:var(--ok)}.system-status .offline{color:var(--bad)}.simulation{display:inline-block;background:#fff3cf;color:#795600;border:1px solid #e6cc83;border-radius:5px;padding:3px 8px;font-size:12px}.operator-panel{margin-bottom:18px}.operator-bar{margin-top:8px}.operator-panel p{margin-bottom:6px}.operator-panel .relay-lights{margin-top:8px}.operator-panel #winchFeedback{margin:7px 0 0;min-height:0}.control-card{background:var(--panel);padding:16px;border:1px solid var(--line);border-radius:10px}.relay-lights{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.relay-light{padding:6px 9px;background:var(--slot);border:1px solid var(--line);border-radius:5px;font-size:12px}.relay-light.on{background:var(--ok-fill);color:var(--ok);border-color:var(--ok)}.stop-button{border-color:var(--bad);color:var(--bad);font-weight:600}#winchFeedback{min-height:20px}.diagnostic-addresses{font:12px/1.7 ui-monospace,monospace}.capture .form-panel{padding:16px}.camera{max-height:330px}.feedback{min-height:20px}
+</style></head><body>
+<header><div><div class="eyebrow">2.009 BLUE TEAM · INSPECTION PROTOTYPE</div><h1>Inspection control</h1></div><span id="status" class="status" role="status">Connecting…</span></header>
+<main>
+<section class="control-card operator-panel" aria-label="Inspection controls"><h2>Winch and inspection controls</h2><p class="hint"><span class="simulation">Relay HAT simulation</span> Direction buttons model 0.3 second jogs. Physical outputs are not connected.</p><div class="actions operator-bar"><button id="winchStart" type="button" disabled>Start</button><button id="winchUp" type="button" disabled>↑ Up</button><button id="winchDown" type="button" disabled>↓ Down</button><button id="winchStop" class="stop-button" type="button" disabled>Stop</button><button id="audioToggle" type="button" aria-pressed="false">Listen to microphone</button><button id="photo" class="primary" disabled>Capture photo</button><button id="start">Reconnect video</button></div><div class="actions" aria-label="Solenoid controls">
+  <button id="tapOnce" type="button" disabled>Tap once</button>
+  <label for="tapHz">Auto tap (Hz)</label>
+  <input id="tapHz" type="number" min="0.1" max="12.4" step="any" value="2" style="width:5rem">
+  <button id="tapAuto" type="button" disabled>Start auto tap</button>
+  <button id="tapStop" type="button" disabled>Stop tap</button>
+</div>
+<p id="tapStatus" class="hint" role="status">Waiting for the robot tap controller…</p>
+<div class="relay-lights" aria-label="Simulated relay contacts"><span id="relay1" class="relay-light">CH1 · Up</span><span id="relay2" class="relay-light">CH2 · Down</span><span id="relay3" class="relay-light">CH3 · Start</span><span id="relay4" class="relay-light">CH4 · Stop</span></div><p id="winchFeedback" class="hint" role="status">Waiting for controller…</p></section>
+<section class="capture" aria-label="Capture and position">
+<div><div class="camera"><video id="video" autoplay muted playsinline controls></video><div id="overlay" class="overlay"><div id="message">Connecting…</div><small id="detail">Waiting for the robot camera.</small></div></div><p id="linkStatus" class="hint" role="status">Checking camera connection…</p><button id="resume" hidden>Resume video</button><audio id="microphone"></audio><p id="audioStatus" class="hint" role="status">Microphone playback is off.</p><div class="system-status" aria-live="polite"><span id="robotState">Camera unit · checking</span><span id="roofState">Winch controller · checking</span><span id="exchangeState">Data link · checking</span></div></div>
+<div class="form-panel"><h2>Brick position and condition</h2><p class="hint"><span class="simulation">Sample encoder positions</span> Positions arrive automatically from the controller. Choose the brick condition before capturing.</p>
+<div class="fields"><label>X position<input id="encoderX" type="number" value="" readonly aria-label="Sample X encoder count"></label><label>Y position<input id="encoderY" type="number" value="" readonly aria-label="Sample Y encoder count"></label><label class="wide">Brick condition<select id="brickStatus"><option value="good">Good · green</option><option value="bad">Bad · red</option></select></label></div>
+
+<div id="photoStatus" class="feedback" role="status"></div><p class="hint">The map is saved in this browser. Each capture also downloads a PNG to this laptop.</p>
+<p id="positionStatus" class="hint" role="status">Waiting for sample positions…</p>
+</div>
+</section>
+<section aria-label="Inspection map">
+<div class="summary" aria-live="polite"><span class="count"><strong id="totalCount">0</strong> photos</span><span class="count"><strong id="positionCount">0</strong> positions</span><span class="count good-text"><strong id="goodCount">0</strong> good</span><span class="count bad-text"><strong id="badCount">0</strong> bad</span><button id="exportMap">Back up map</button><button id="importMap">Import map</button><input id="importFile" type="file" accept=".json,application/json" hidden></div>
+<div class="map-head"><div><h2>Inspection map</h2><p class="hint">X increases right · Y increases upward · encoder counts</p></div><div class="tabs" aria-label="Map view"><button id="mapTab" aria-pressed="true">X / Y grid</button><button id="galleryTab" aria-pressed="false">All photos</button></div></div>
+<div id="mapState" role="status" class="hint"></div>
+<div id="mapWrap" class="map-wrap"><div id="mapGrid" class="map-grid"></div></div><div id="gallery" class="gallery" hidden></div>
+<div class="legend"><span>Good</span><span class="bad-key">Bad</span><span class="empty-key">Not photographed</span></div><p class="hint">The grid uses captured coordinate values as rows and columns. Cells are equal-sized; distance is not drawn to scale. Each position shows its latest photo and label.</p>
+</section>
+<details><summary>Connection diagnostics</summary><p id="deviceAddresses" class="diagnostic-addresses"></p><p id="packetStatus" class="hint"></p><div class="actions"><button id="stop">Stop video</button><button id="export">Save connection log</button></div><div class="metrics"><div><span>Received video</span><strong id="rate">—</strong></div><div><span>Frames / sec</span><strong id="fps">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div><div><span>Last frame</span><strong id="age">—</strong></div><div><span>Interruptions</span><strong id="drops">0</strong></div><div><span>Interrupted time</span><strong id="downtime">0 s</strong></div></div><p id="route" class="hint">Private Ethernet connection</p><canvas id="history" aria-label="Video availability timeline"></canvas><div id="events" aria-label="Connection event log"></div></details>
+</main>
+<dialog id="photoDialog"><div class="dialog-head"><h2 id="dialogTitle">Brick photo</h2><button id="closeDialog" aria-label="Close photo">Close</button></div><img id="largePhoto" alt="Selected brick capture"><p id="dialogMeta" class="dialog-meta"></p><div class="actions"><button id="markGood" class="good">Mark good · green</button><button id="markBad" class="bad">Mark bad · red</button><a id="downloadPhoto" href="#">Download photo</a></div><div id="retakes" class="thumbs" aria-label="All photos at this position"></div><p id="dialogStatus" class="hint" role="status"></p></dialog>
+<script src="/storage.js"></script>
+<script src="/player.js"></script>
+<script src="/dashboard.js"></script>
+<script>
+(()=>{
+const el=id=>document.getElementById(id);
+let photos=[],selectedId=null,galleryMode=false,polling=false;
+const positionKey=p=>JSON.stringify([p.x,p.y]);
+const format=n=>Number(n).toString();
+function tile(p,count=1){
+ const button=document.createElement('button');button.type='button';button.className='tile filled '+p.status;
+ button.setAttribute('aria-label',`${p.status} brick at X ${p.x}, Y ${p.y}, ${count} photo${count===1?'':'s'}`);
+ const img=document.createElement('img');img.src=p.url;img.loading='lazy';img.alt=`Brick at X ${p.x}, Y ${p.y}`;
+ button.append(img);
+ for(const [cls,text] of [['badge',p.status==='good'?'GOOD':'BAD'],['position',`X ${format(p.x)} · Y ${format(p.y)}`],...(count>1?[['retakes',`${count} photos`]]:[])]){const span=document.createElement('span');span.className=cls;span.textContent=text;button.append(span);}
+ button.onclick=()=>openPhoto(p.id);return button;
+}
+function render(){
+ const positions=new Map();for(const p of photos){const k=positionKey(p);if(!positions.has(k))positions.set(k,[]);positions.get(k).push(p);}
+ el('totalCount').textContent=photos.length;el('positionCount').textContent=positions.size;
+ el('goodCount').textContent=photos.filter(p=>p.status==='good').length;el('badCount').textContent=photos.filter(p=>p.status==='bad').length;
+ el('mapWrap').hidden=galleryMode;el('gallery').hidden=!galleryMode;
+ el('mapTab').setAttribute('aria-pressed',String(!galleryMode));el('galleryTab').setAttribute('aria-pressed',String(galleryMode));
+ const grid=el('mapGrid');grid.replaceChildren();el('gallery').replaceChildren();
+ if(!photos.length){const empty=document.createElement('div');empty.className='empty-state';empty.textContent='No photos on this laptop yet. Choose Good or Bad and capture your first photo.';grid.append(empty);el('gallery').append(empty.cloneNode(true));return;}
+ for(const p of [...photos].reverse())el('gallery').append(tile(p));
+ const xs=[...new Set(photos.map(p=>p.x))].sort((a,b)=>a-b),ys=[...new Set(photos.map(p=>p.y))].sort((a,b)=>b-a);
+ if(xs.length*ys.length>2500){grid.textContent='This grid has more than 2,500 coordinate combinations. Use All photos to browse the captures.';return;}
+ grid.style.gridTemplateColumns=`65px repeat(${xs.length}, 150px)`;
+ const axis=(text,corner=false)=>{const d=document.createElement('div');d.className='axis'+(corner?' corner':'');d.textContent=text;return d;};
+ grid.append(axis('Y ↑ / X →',true));for(const x of xs)grid.append(axis(format(x)));
+ for(const y of ys){grid.append(axis(format(y)));for(const x of xs){const list=positions.get(JSON.stringify([x,y]));if(list){grid.append(tile(list[list.length-1],list.length));}else{const empty=document.createElement('div');empty.className='tile empty';empty.textContent='No photo';empty.setAttribute('aria-label',`No photo at X ${x}, Y ${y}`);grid.append(empty);}}}
+}
+async function load(){
+ if(polling)return;
+ polling=true;
+ try{photos=await window.brickStorage.list();render();el('mapState').textContent='';}
+ catch(error){el('mapState').textContent='Could not open this browser’s saved map: '+error.message;}
+ finally{polling=false;}
+}
+function showSelected(){
+ const p=photos.find(p=>p.id===selectedId);if(!p)return;
+ el('dialogTitle').textContent=`X ${format(p.x)} · Y ${format(p.y)} · ${p.status.toUpperCase()}`;
+ el('largePhoto').src=p.url;
+ el('downloadPhoto').href=p.url;el('downloadPhoto').download=p.name;
+ const source=p.position_source==='simulated-rooftop'?'Sample encoder position':'Manual encoder position';
+ el('dialogMeta').textContent=`${new Date(p.captured_at).toLocaleString()} · ${p.width} × ${p.height} · ${source} / manual label · ${p.name}`;
+ el('markGood').setAttribute('aria-pressed',String(p.status==='good'));el('markBad').setAttribute('aria-pressed',String(p.status==='bad'));
+ el('retakes').replaceChildren();const list=photos.filter(other=>positionKey(other)===positionKey(p));
+ for(const item of list){const b=document.createElement('button');b.setAttribute('aria-label',`${item.status} capture at ${new Date(item.captured_at).toLocaleTimeString()}`);b.setAttribute('aria-pressed',String(item.id===p.id));const img=document.createElement('img');img.src=item.url;img.alt=item.status;b.append(img);b.onclick=()=>{selectedId=item.id;showSelected();};el('retakes').append(b);}
+}
+function openPhoto(id){selectedId=id;el('dialogStatus').textContent='';showSelected();el('photoDialog').showModal();}
+async function mark(status){
+ const id=selectedId;el('markGood').disabled=el('markBad').disabled=true;
+ try{const result=await window.brickStorage.label(id,status);photos=photos.map(p=>p.id===id?result:p);render();showSelected();el('dialogStatus').textContent='Label saved on this laptop.';}
+ catch(error){el('dialogStatus').textContent=error.message;}finally{el('markGood').disabled=el('markBad').disabled=false;}
+}
+el('markGood').onclick=()=>mark('good');el('markBad').onclick=()=>mark('bad');el('closeDialog').onclick=()=>el('photoDialog').close();
+el('photoDialog').onclick=event=>{if(event.target===el('photoDialog'))el('photoDialog').close();};
+el('mapTab').onclick=()=>{galleryMode=false;render();};el('galleryTab').onclick=()=>{galleryMode=true;render();};
+el('exportMap').onclick=async()=>{
+ try{
+  const data=await window.brickStorage.backup();
+  const file=new Blob([JSON.stringify(data)],{type:'application/json'});
+  window.brickStorage.download(file,'brick-map-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json');
+ }catch(error){el('mapState').textContent='Backup failed: '+error.message;}
+};
+el('importMap').onclick=()=>el('importFile').click();
+el('importFile').onchange=async()=>{
+ const file=el('importFile').files[0];if(!file)return;
+ try{
+  const count=await window.brickStorage.restore(JSON.parse(await file.text()));
+  await load();el('mapState').textContent=`Imported ${count} photo${count===1?'':'s'} on this laptop.`;
+ }catch(error){el('mapState').textContent='Import failed: '+error.message;}
+ finally{el('importFile').value='';}
+};
+window.addEventListener('brickcaptured',load);
+window.addEventListener('focus',load);
+load();
+})();
+</script></body></html>

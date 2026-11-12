@@ -5,6 +5,7 @@
 | Folder | What's in it |
 |---|---|
 | `simulations/fourwinch/` | Statics, power and energy simulator for the 4-winch cable robot on a flat wall |
+| [Brick Mapper](camera%20testing/pi-hosted/) | Pi-hosted inspection dashboard, camera, and solenoid tap controls |
 
 ## Setup
 
