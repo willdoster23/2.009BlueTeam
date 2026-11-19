@@ -38,6 +38,9 @@ reader.active(1)
 # The encoder's PWM frame is 4119 clocks. Its valid zero starts with 16 high clocks.
 # Firmware reports accumulated 12-bit angle counts, or 4096 counts per revolution.
 period_counts = 4096
+# USB CDC does not use a hardware UART baud clock. Report accumulated position
+# at 100 Hz while continuing to unwrap every available ~1 kHz PWM frame.
+report_interval_ms = 10
 epoch = int.from_bytes(os.urandom(4), "little")
 sequence = 0
 position = 0
@@ -73,9 +76,10 @@ while True:
         angle = current
         last_frame = now
 
-    if time.ticks_diff(now, last_report) >= 50:
+    if time.ticks_diff(now, last_report) >= report_interval_ms:
         sequence = (sequence + 1) & 0xffffffff
         state = "idle" if angle is not None else "signal"
         sys.stdout.write("BM1 Y {} {} {} {}\n".format(sequence, position, state, epoch))
         last_report = now
-    time.sleep_ms(1)
+    # Drain the eight-frame PIO RX FIFO well before the next encoder frame.
+    time.sleep_us(250)

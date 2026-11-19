@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'pi'))
-from outrigger import PulseResponse, WINCH_PROFILES, PulleyAxis, Reading
+from outrigger import PulseResponse, WINCH_PROFILES, PulleyAxis, Reading, WinchMove
 import winch
 
 
@@ -138,6 +138,93 @@ class RelayTests(unittest.TestCase):
             self.relays.pulse('up', 1501)
         with self.assertRaises(ValueError):
             self.relays.pulse('down', 1501)
+
+
+class DirectionTests(unittest.TestCase):
+    def run_move(self, offsets, direction, sign, distance):
+        now = 0.0
+        pending = iter(offsets)
+        offset = 0
+        disarms = []
+
+        class Clock:
+            @staticmethod
+            def monotonic():
+                return now
+
+            @staticmethod
+            def sleep(seconds):
+                nonlocal now
+                now += seconds
+
+        class Driver:
+            active = None
+            until = 0.0
+            releases = 0
+
+            def busy(self):
+                return now < self.until
+
+            def action(self):
+                return self.active if self.busy() else None
+
+            def pulse(self, action, duration_ms=300):
+                self.active, self.until = action, now + duration_ms / 1000
+                return True
+
+            def release(self):
+                self.active, self.until = None, now
+                self.releases += 1
+
+            def motion_seconds(self):
+                return 0.0
+
+        def sample(_):
+            nonlocal offset
+            offset = next(pending, offset)
+            return Reading('Y', 1, 1, (8000 + offset * direction) * sign,
+                           'idle', 7, now)
+
+        with tempfile.TemporaryDirectory() as directory, patch('outrigger.time', Clock):
+            driver = Driver()
+            axis = PulleyAxis(SimpleNamespace(reading=sample), driver, threading.RLock(),
+                              lambda: True, lambda: disarms.append(True),
+                              Path(directory) / 'pulley.json')
+            axis.sign = sign
+            axis.origin = (1, 7, 0)
+            job = WinchMove('direction-test', 8000 + distance * direction,
+                            direction, 10.0)
+            axis.active = job
+            axis.pulse_control = {'pulses': 0}
+            axis._move(job, 8000, distance, True)
+            return axis, driver, disarms
+
+    def test_reverse_readings_below_quarter_turn_can_recover_and_finish(self):
+        for direction in (-1, 1):
+            for sign in (-1, 1):
+                for distance in (65, 4096):
+                    with self.subTest(direction=direction, sign=sign, distance=distance):
+                        axis, _, disarms = self.run_move(
+                            [0, -1, -64, -1023, 0, distance], direction, sign, distance)
+                        self.assertEqual(axis.outcome, 'done')
+                        self.assertEqual(axis.message, 'Y target reached.')
+                        self.assertFalse(disarms)
+
+    def test_quarter_turn_or_more_in_reverse_stops_and_disarms(self):
+        for direction in (-1, 1):
+            for sign in (-1, 1):
+                for distance in (65, 4096):
+                    for reverse in (1024, 1025, 4096):
+                        with self.subTest(direction=direction, sign=sign,
+                                          distance=distance, reverse=reverse):
+                            axis, driver, disarms = self.run_move(
+                                [0, -300, -600, -900, -1023, -reverse],
+                                direction, sign, distance)
+                            self.assertIsNone(axis.active)
+                            self.assertEqual(axis.outcome, 'error')
+                            self.assertEqual(axis.message, 'Y encoder moved opposite the requested motion.')
+                            self.assertEqual(disarms, [True])
+                            self.assertEqual(driver.releases, 1)
 
 
 class TuningTests(unittest.TestCase):

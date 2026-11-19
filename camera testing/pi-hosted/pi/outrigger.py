@@ -16,9 +16,12 @@ from x_axis import MAX_JOG_INCHES, MM_PER_COUNT
 # Moving the installed X carriage to the right decreases the Nano's raw count.
 X_RIGHT_ENCODER_SIGN = -1
 PULLEY_COUNTS = 4096
+# Ignore small reverse readings; stop at a quarter turn opposite the move start.
+Y_REVERSE_LIMIT_COUNTS = PULLEY_COUNTS // 4
 Y_MAX_JOG_INCHES = 12
 MOTION_LEASE = 2.0
 FRESH_SECONDS = 0.35
+SERIAL_READ_SECONDS = 0.005
 WINCH_TIMEOUT_SECONDS = 90
 Y_CONFIG = Path('/var/lib/brick-mapper-outrigger/pulley.json')
 MOTOR_STATES = {'idle', 'moving', 'done', 'stopped', 'stall', 'reverse', 'timeout', 'link'}
@@ -236,7 +239,7 @@ class SerialBoards:
 
     def _work(self):
         next_scan = 0
-        while not self.finished.wait(0.02):
+        while not self.finished.wait(SERIAL_READ_SECONDS):
             now = time.monotonic()
             with self.lock:
                 if now >= next_scan:
@@ -490,6 +493,9 @@ class PulleyAxis:
                 'ready': measured, 'downReady': measured, 'upReady': measured,
                 'zeroed': self.origin is not None, 'moving': self.active is not None,
                 'rawCounts': reading.counts if reading else None, 'counts': counts,
+                'encoderSequence': reading.sequence if reading else None,
+                'encoderEpoch': reading.tag if reading else None,
+                'encoderAgeMs': round((time.monotonic() - reading.received) * 1000, 1) if reading else None,
                 'inches': counts * self.travel / PULLEY_COUNTS if counts is not None else None,
                 'moveId': self.last_id, 'outcome': self.outcome, 'message': hint, 'warning': self.warning,
                 'pulseControl': dict(self.pulse_control) if self.pulse_control else None,
@@ -661,7 +667,7 @@ class PulleyAxis:
                         self.stop('Y motion timed out.', disarm=True)
                         return
                     remaining = (job.target - count) * job.direction
-                    if (count - start) * job.direction < -max(3, tolerance):
+                    if (count - start) * job.direction <= -Y_REVERSE_LIMIT_COUNTS:
                         self.stop('Y encoder moved opposite the requested motion.', disarm=True)
                         return
 

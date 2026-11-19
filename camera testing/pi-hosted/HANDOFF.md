@@ -461,11 +461,38 @@ Arduino upload FQBN: `arduino:megaavr:nona4809`. Stop the roof controller before
 - Reports accumulated 12-bit position: **4096 counts per revolution**.
 - Calibration starts at effective pulley radius 1 inch → circumference **6.283185 in/rev**; user planned to refine it.
 - `direction=1` was established as increasing payout/down in prior tests. User asked to remove routine direction-selection UI; do not reverse it casually.
+- The updated Y opposite-direction stop requires **1024 counts (one quarter revolution / 90 degrees)** of net reverse travel from the measured move's starting position, regardless of jog distance or pulley travel calibration. Smaller reverse readings do not trigger this error. Feedback-loss, no-progress, timeout, and route-limit checks remain in place. Eleven local tests pass, including recovery from sub-quarter-turn reverse readings and stopping/disarming at or beyond a quarter turn in both directions and with both encoder polarities. Roof installation is pending reconnection of the inspection Ethernet adapter, which disconnected after the live source was checked and before either upload succeeded; the live direction check is unchanged.
 - Pico program lives as flash `main.py` and should run at power-up. Existing local source is included; flash contents were not read back in this handoff.
 
 ### Serial protocol and auto-discovery
 
-Both boards report at roughly 50 ms intervals, 115200 baud:
+The roof opens both USB serial devices with a nominal 115200 baud setting. The
+Nano reports at roughly 50 ms intervals. The updated Pico source reports at
+10 ms intervals (100 Hz), drains its PIO FIFO every 250 microseconds, and still
+unwraps the encoder's approximately 1 kHz PWM frames. The roof serial worker
+checks the devices every 5 ms. Pico USB CDC throughput is not increased by
+changing the nominal UART baud setting; do not change the Nano's baud to try
+to speed up the Pico.
+
+On November 19, the Pico's flash `main.py` was read back and matched the prior
+20 Hz source. With the user confirming the winch was unplugged, the updated
+Pico firmware and roof reader were installed and verified. USB output measured
+100.0 Hz (195 reports in about two seconds, one stable epoch). A separate
+250 ms hardware capture produced 273 valid PWM frames, approximately 1092 Hz;
+15 short/out-of-range frames were rejected by the existing frame filter. This
+does not establish the cause of the user's incorrect final counts after fast
+rotation. Physical slow/fast one-revolution accuracy still needs checking.
+The firmware restart invalidates the previous Y zero. Backups on the roof:
+`/var/backups/brick-mapper/20261119T024251Z-y-100hz/`.
+Y status also exposes `encoderSequence`, `encoderEpoch`, and `encoderAgeMs`
+for passive diagnosis of report rate, counter restarts, and stale readings.
+After deployment, the user made an approximately one-revolution quick turn;
+raw counts changed from approximately zero to 4371. The user confirmed this was
+not a precisely marked full revolution. Do not use that trial to recalibrate
+4096 counts/revolution or declare a 6.7% encoder error. The Pico epoch remained
+unchanged from the firmware restart through the test. A subsequent roof API
+check measured 100.3 reports/s, maximum sample age 10.4 ms, Y connected and
+unzeroed, X connected, and no busy relay output. No motor-driven test was run.
 
 ```text
 BM1 X <sequence> <signed-counts> <state> <move-tag>
