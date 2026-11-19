@@ -18,6 +18,7 @@ X_RIGHT_ENCODER_SIGN = -1
 PULLEY_COUNTS = 4096
 # Ignore small reverse readings; stop at a quarter turn opposite the move start.
 Y_REVERSE_LIMIT_COUNTS = PULLEY_COUNTS // 4
+Y_TARGET_TOLERANCE_INCHES = 0.5
 Y_MAX_JOG_INCHES = 12
 MOTION_LEASE = 2.0
 FRESH_SECONDS = 0.35
@@ -609,6 +610,14 @@ class PulleyAxis:
                 # Round toward the roof if the requested stop lands between counts at the limit.
                 target -= 1
                 distance = target - counts
+        if payload['inches'] <= Y_TARGET_TOLERANCE_INCHES:
+            if self.winch.busy():
+                return 409, {'error': 'The winch is busy. Wait for the current command to finish.'}
+            self.handled.append(command_id)
+            self.last_id = command_id
+            self.warning = self.pulse_control = None
+            self._complete(distance, counts)
+            return 200, self.snapshot()
         try:
             if not self.arm():
                 return 409, {'error': 'The winch is busy. Wait for the current command to finish.'}
@@ -648,7 +657,7 @@ class PulleyAxis:
         response = PulseResponse(profile)
         if self.timed:
             response.rate = self.timed_speed / 1000
-        tolerance = min(max(1, distance // 2), max(1, int(0.075 * PULLEY_COUNTS / self.travel)))
+        tolerance = Y_TARGET_TOLERANCE_INCHES * PULLEY_COUNTS / self.travel
         try:
             while True:
                 with self.lock:
@@ -719,7 +728,7 @@ class PulleyAxis:
                     self.stop(str(error), disarm=True)
 
     def _complete(self, remaining, count):
-        if remaining < -3:
+        if remaining < -Y_TARGET_TOLERANCE_INCHES * PULLEY_COUNTS / self.travel:
             overshoot = -remaining * self.travel / PULLEY_COUNTS
             position = count * self.travel / PULLEY_COUNTS
             self.warning = f'Y went {overshoot:.2f} in past the target. Measured Y {position:.2f} in.'

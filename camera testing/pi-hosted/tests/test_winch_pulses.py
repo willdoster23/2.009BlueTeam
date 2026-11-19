@@ -141,7 +141,7 @@ class RelayTests(unittest.TestCase):
 
 
 class DirectionTests(unittest.TestCase):
-    def run_move(self, offsets, direction, sign, distance):
+    def run_move(self, offsets, direction, sign, distance, travel=math.tau):
         now = 0.0
         pending = iter(offsets)
         offset = 0
@@ -162,6 +162,9 @@ class DirectionTests(unittest.TestCase):
             until = 0.0
             releases = 0
 
+            def __init__(self):
+                self.pulses = []
+
             def busy(self):
                 return now < self.until
 
@@ -169,6 +172,7 @@ class DirectionTests(unittest.TestCase):
                 return self.active if self.busy() else None
 
             def pulse(self, action, duration_ms=300):
+                self.pulses.append(action)
                 self.active, self.until = action, now + duration_ms / 1000
                 return True
 
@@ -191,6 +195,7 @@ class DirectionTests(unittest.TestCase):
                               lambda: True, lambda: disarms.append(True),
                               Path(directory) / 'pulley.json')
             axis.sign = sign
+            axis.travel = travel
             axis.origin = (1, 7, 0)
             job = WinchMove('direction-test', 8000 + distance * direction,
                             direction, 10.0)
@@ -202,7 +207,7 @@ class DirectionTests(unittest.TestCase):
     def test_reverse_readings_below_quarter_turn_can_recover_and_finish(self):
         for direction in (-1, 1):
             for sign in (-1, 1):
-                for distance in (65, 4096):
+                for distance in (512, 4096):
                     with self.subTest(direction=direction, sign=sign, distance=distance):
                         axis, _, disarms = self.run_move(
                             [0, -1, -64, -1023, 0, distance], direction, sign, distance)
@@ -213,7 +218,7 @@ class DirectionTests(unittest.TestCase):
     def test_quarter_turn_or_more_in_reverse_stops_and_disarms(self):
         for direction in (-1, 1):
             for sign in (-1, 1):
-                for distance in (65, 4096):
+                for distance in (512, 4096):
                     for reverse in (1024, 1025, 4096):
                         with self.subTest(direction=direction, sign=sign,
                                           distance=distance, reverse=reverse):
@@ -225,6 +230,60 @@ class DirectionTests(unittest.TestCase):
                             self.assertEqual(axis.message, 'Y encoder moved opposite the requested motion.')
                             self.assertEqual(disarms, [True])
                             self.assertEqual(driver.releases, 1)
+
+    def test_half_inch_before_or_past_target_finishes_without_more_pulses(self):
+        for direction in (-1, 1):
+            for sign in (-1, 1):
+                for travel in (4, 8):
+                    half_inch = round(.5 * 4096 / travel)
+                    for remaining in (half_inch, 0, -half_inch):
+                        with self.subTest(direction=direction, sign=sign,
+                                          travel=travel, remaining=remaining):
+                            axis, driver, disarms = self.run_move(
+                                [0, 2048 - remaining], direction, sign, 2048, travel)
+                            self.assertEqual(axis.outcome, 'done')
+                            self.assertIsNone(axis.warning)
+                            self.assertFalse(disarms)
+                            self.assertEqual(driver.pulses.count('up' if direction < 0 else 'down'), 1)
+                            self.assertEqual(driver.pulses.count('stop'), 1)
+
+    def test_more_than_half_inch_short_still_gets_a_correction(self):
+        for direction in (-1, 1):
+            with self.subTest(direction=direction):
+                axis, driver, _ = self.run_move(
+                    [0] + [2048 - 257] * 100 + [2048], direction, 1, 2048, 8)
+                self.assertEqual(axis.outcome, 'done')
+                self.assertGreaterEqual(driver.pulses.count('up' if direction < 0 else 'down'), 2)
+
+    def test_overshoot_beyond_half_inch_stops_with_a_warning(self):
+        for direction in (-1, 1):
+            with self.subTest(direction=direction):
+                axis, driver, _ = self.run_move([0, 2048 + 257], direction, 1, 2048, 8)
+                self.assertEqual(axis.outcome, 'done')
+                self.assertIn('past the target', axis.warning)
+                self.assertEqual(driver.pulses.count('up' if direction < 0 else 'down'), 1)
+
+    def test_short_request_already_in_tolerance_does_not_arm_or_move(self):
+        for action in ('up', 'down'):
+            for inches in (.1, .49, .5):
+                with self.subTest(action=action, inches=inches), tempfile.TemporaryDirectory() as directory:
+                    boards = SimpleNamespace(reading=lambda _: Reading(
+                        'Y', 1, 1, 8000, 'idle', 7, time.monotonic()))
+                    axis = PulleyAxis(boards, SimpleNamespace(busy=lambda: False), threading.RLock(),
+                                      lambda: self.fail('Already within tolerance: do not arm'),
+                                      lambda: self.fail('Already within tolerance: do not disarm'),
+                                      Path(directory) / 'pulley.json')
+                    axis.origin = (1, 7, 0)
+                    status, result = axis.command({'id': 'short-move', 'mode': 'live',
+                                                   'action': action, 'inches': inches})
+                    self.assertEqual(status, 200)
+                    self.assertEqual(result['moveId'], 'short-move')
+                    self.assertEqual(result['outcome'], 'done')
+                    self.assertFalse(result['moving'])
+                    self.assertEqual(result['counts'], 8000)
+                    axis.winch.busy = lambda: True
+                    self.assertEqual(axis.command({'id': 'busy-short-move', 'mode': 'live',
+                                                    'action': action, 'inches': inches})[0], 409)
 
 
 class TuningTests(unittest.TestCase):
