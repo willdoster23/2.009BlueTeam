@@ -20,16 +20,19 @@ class EthernetConnection(http.client.HTTPConnection):
         super().__init__(host, port, timeout=timeout, source_address=(source, 0))
 
 
-def request(role, path, payload=None):
+def request(role, path, payload=None, timeout=1.2, response_limit=65536):
     address = {'roof': ROOF_IP, 'robot': ROBOT_IP}[role]
     key = KEY_FILE.read_text().strip()
-    connection = EthernetConnection(address, 8091, timeout=1.2)
+    connection = EthernetConnection(address, 8091, timeout=timeout)
     try:
         body = None if payload is None else json.dumps(payload)
         connection.request('GET' if payload is None else 'POST', path, body,
                            {'X-Network-Key': key, 'Content-Type': 'application/json'})
         response = connection.getresponse()
-        data = json.loads(response.read(65536))
+        body = response.read(response_limit + 1)
+        if len(body) > response_limit:
+            raise ValueError('Controller response is too large')
+        data = json.loads(body)
         return response.status, data
     finally:
         connection.close()
@@ -69,8 +72,11 @@ def command(payload):
     if payload.get('action') not in ('up', 'down', 'start', 'stop'):
         return 400, {'error': 'Unknown winch command'}
     roof = status()['roof']
-    if not roof['reachable'] or roof['data']['relays']['mode'] != 'simulation':
-        return 503, {'error': 'Rooftop simulation is unavailable'}
+    if not roof['reachable']:
+        return 503, {'error': 'Rooftop controller is unavailable'}
+    relays = roof['data']['relays']
+    if relays['mode'] in ('live-up', 'live-four') and payload['action'] != 'stop' and payload.get('mode') != relays['mode']:
+        return 409, {'error': 'Reload Brick Mapper to use live winch controls'}
     try:
         # A command is sent once. A lost acknowledgement never triggers a replay.
         return request('roof', '/api/winch', payload)
@@ -80,9 +86,37 @@ def command(payload):
 
 def tap(payload):
     try:
+        if payload.get('action') == 'burst':
+            return request('robot', '/api/tap', payload, timeout=8, response_limit=512 * 1024)
+        if payload.get('action') == 'single' and payload.get('record') is True:
+            return request('robot', '/api/tap', payload, timeout=7, response_limit=262144)
         return request('robot', '/api/tap', payload)
     except (OSError, ValueError, http.client.HTTPException):
         return 503, {'error': 'Robot tap controller is unavailable'}
+
+
+def camera(payload):
+    roof = status()['roof']
+    if roof['reachable'] and any((roof['data'].get(axis) or {}).get('moving') for axis in ('xAxis', 'yAxis')):
+        return 409, {'error': 'Wait for movement to finish before switching camera modes.'}
+    try:
+        return request('robot', '/api/camera', payload)
+    except (OSError, ValueError, http.client.HTTPException):
+        return 503, {'error': 'Robot camera controls are unavailable.'}
+
+
+def axis(path, payload):
+    try:
+        return request('roof', path, payload)
+    except (OSError, ValueError, http.client.HTTPException):
+        return 503, {'error': 'Could not confirm the movement command. Check the controller status.'}
+
+
+def poweroff():
+    try:
+        return request('roof', '/api/poweroff', {}, timeout=7)
+    except (OSError, ValueError, http.client.HTTPException):
+        return 503, {'error': 'Shutdown could not be confirmed. Keep both Pis powered.'}
 
 
 def start():

@@ -8,97 +8,586 @@
 </style>
 <style>
 .system-status{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}.system-status span{padding:6px 10px;border:1px solid var(--line);border-radius:20px}.system-status .online{color:var(--ok)}.system-status .offline{color:var(--bad)}.simulation{display:inline-block;background:#fff3cf;color:#795600;border:1px solid #e6cc83;border-radius:5px;padding:3px 8px;font-size:12px}.operator-panel{margin-bottom:18px}.operator-bar{margin-top:8px}.operator-panel p{margin-bottom:6px}.operator-panel .relay-lights{margin-top:8px}.operator-panel #winchFeedback{margin:7px 0 0;min-height:0}.control-card{background:var(--panel);padding:16px;border:1px solid var(--line);border-radius:10px}.relay-lights{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.relay-light{padding:6px 9px;background:var(--slot);border:1px solid var(--line);border-radius:5px;font-size:12px}.relay-light.on{background:var(--ok-fill);color:var(--ok);border-color:var(--ok)}.stop-button{border-color:var(--bad);color:var(--bad);font-weight:600}#winchFeedback{min-height:20px}.diagnostic-addresses{font:12px/1.7 ui-monospace,monospace}.capture .form-panel{padding:16px}.camera{max-height:330px}.feedback{min-height:20px}
-</style></head><body>
-<header><div><div class="eyebrow">2.009 BLUE TEAM · INSPECTION PROTOTYPE</div><h1>Inspection control</h1></div><span id="status" class="status" role="status">Connecting…</span></header>
-<main>
-<section class="control-card operator-panel" aria-label="Inspection controls"><h2>Winch and inspection controls</h2><p class="hint"><span class="simulation">Relay HAT simulation</span> Direction buttons model 0.3 second jogs. Physical outputs are not connected.</p><div class="actions operator-bar"><button id="winchStart" type="button" disabled>Start</button><button id="winchUp" type="button" disabled>↑ Up</button><button id="winchDown" type="button" disabled>↓ Down</button><button id="winchStop" class="stop-button" type="button" disabled>Stop</button><button id="audioToggle" type="button" aria-pressed="false">Listen to microphone</button><button id="photo" class="primary" disabled>Capture photo</button><button id="start">Reconnect video</button></div><div class="actions" aria-label="Solenoid controls">
-  <button id="tapOnce" type="button" disabled>Tap once</button>
-  <label for="tapHz">Auto tap (Hz)</label>
-  <input id="tapHz" type="number" min="0.1" max="12.4" step="any" value="2" style="width:5rem">
-  <button id="tapAuto" type="button" disabled>Start auto tap</button>
-  <button id="tapStop" type="button" disabled>Stop tap</button>
-</div>
-<p id="tapStatus" class="hint" role="status">Waiting for the robot tap controller…</p>
-<div class="relay-lights" aria-label="Simulated relay contacts"><span id="relay1" class="relay-light">CH1 · Up</span><span id="relay2" class="relay-light">CH2 · Down</span><span id="relay3" class="relay-light">CH3 · Start</span><span id="relay4" class="relay-light">CH4 · Stop</span></div><p id="winchFeedback" class="hint" role="status">Waiting for controller…</p></section>
-<section class="capture" aria-label="Capture and position">
-<div><div class="camera"><video id="video" autoplay muted playsinline controls></video><div id="overlay" class="overlay"><div id="message">Connecting…</div><small id="detail">Waiting for the robot camera.</small></div></div><p id="linkStatus" class="hint" role="status">Checking camera connection…</p><button id="resume" hidden>Resume video</button><audio id="microphone"></audio><p id="audioStatus" class="hint" role="status">Microphone playback is off.</p><div class="system-status" aria-live="polite"><span id="robotState">Camera unit · checking</span><span id="roofState">Winch controller · checking</span><span id="exchangeState">Data link · checking</span></div></div>
-<div class="form-panel"><h2>Brick position and condition</h2><p class="hint"><span class="simulation">Sample encoder positions</span> Positions arrive automatically from the controller. Choose the brick condition before capturing.</p>
-<div class="fields"><label>X position<input id="encoderX" type="number" value="" readonly aria-label="Sample X encoder count"></label><label>Y position<input id="encoderY" type="number" value="" readonly aria-label="Sample Y encoder count"></label><label class="wide">Brick condition<select id="brickStatus"><option value="good">Good · green</option><option value="bad">Bad · red</option></select></label></div>
+.header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.job-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}#jobStatus:empty{display:none}
+.poweroff-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.poweroff-controls .hint{margin:0}
+#tapRecordings{margin:10px 0}#tapClips{margin:6px 0;padding:0;list-style:none}#tapClips li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0}#tapClips audio{width:250px;max-width:100%;height:36px}
+.workspace{display:grid;grid-template-columns:minmax(0,2.7fr) minmax(290px,1fr);gap:22px;align-items:start}
+.camera-pane{position:sticky;top:14px;min-width:0}.camera{max-height:calc(100dvh - 160px)}.workspace-controls{min-width:0;max-height:calc(100dvh - 36px);overflow-y:auto;padding:0 4px 6px}
+.workspace-controls section,.workspace-controls .form-panel{margin-bottom:12px}.workspace-controls p{margin-bottom:8px}.workspace-controls .summary{gap:5px;margin:10px 0}
+.workspace-controls{scroll-padding-top:10px}
+.corrected-video{display:block;width:100%;height:100%;object-fit:contain}
+.corrected-video[hidden]{display:none}
+.camera video.lens-source{position:absolute;inset:0;opacity:0;pointer-events:none}
+.camera-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}.camera-tools p{margin:0}.lens-option{display:flex;flex-direction:row;align-items:center;gap:6px;margin:0}.lens-option input{width:auto;margin:0}.lens-option[hidden]{display:none}
+.review-preview{width:100%;max-height:170px;object-fit:contain;background:#000;border-radius:6px;margin:8px 0}
+.review-audio audio{display:block;width:100%;height:34px;margin:4px 0}.review-flag{flex-direction:row;align-items:center;margin-top:8px}.review-flag input{width:auto}
+textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px;resize:vertical;width:100%}
+:root{--review:#9a6b00;--review-fill:#fff3cd;--visual:#245cce;--visual-fill:#e8f0ff}
+@media(prefers-color-scheme:dark){:root{--review:#ffcc60;--review-fill:#382a12;--visual:#83acff;--visual-fill:#172a42}}
+.tile.map-cell{min-height:62px;aspect-ratio:auto;display:grid;place-content:center;text-align:center;gap:3px;padding:6px}
+.tile.map-cell.filled .badge{position:static;background:none;color:inherit}.tile.map-cell .position{position:static;background:none;color:var(--muted)}
+.tile.visual,.tile.filled.visual{border-color:var(--visual);background:var(--visual-fill);color:var(--visual)}
+.tile.review,.tile.filled.review{border-color:var(--review);background:var(--review-fill);color:var(--review)}
+.tile.unknown,.tile.filled.unknown{border-color:var(--line);background:var(--slot);color:var(--muted)}
+.tile.visual .badge,.legend .visual-key::before{background:var(--visual)}.tile.review .badge,.legend .review-key::before{background:var(--review)}
+.tile.unknown .badge{background:var(--muted)}.tile.map-cell.good{color:var(--ok)}.tile.map-cell.bad{color:var(--bad)}
+.motion-row{display:grid;grid-template-columns:1fr 7.5rem;gap:4px 10px;align-items:end;border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.motion-row h3,.motion-row .actions,.motion-row p{grid-column:1/-1}
+.motion-row h3{font-size:14px;margin:0}.motion-row .actions{margin-top:4px}
+.motion-row output{display:block;font-variant-numeric:tabular-nums;font-weight:600;margin:0 0 8px}
+.route-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.brick-tile{aspect-ratio:auto!important;display:block;text-align:left;padding:0!important}
+.brick-tile .brick-image{aspect-ratio:2.25;overflow:hidden;position:relative;background:var(--slot)}
+.brick-tile .brick-image img{max-width:none;object-fit:fill}
+.brick-tile-meta{padding:8px 10px;color:var(--text);display:grid;gap:4px;font-size:12px}
+.brick-tile-meta strong{font-size:13px}.brick-tile-meta span{color:var(--muted)}
+.map-grid.by-course{width:auto;gap:0}
+.brick-course{display:grid;grid-template-columns:94px 1fr;align-items:start;gap:12px;padding:12px 0}
+.brick-course+.brick-course{border-top:1px solid var(--line)}
+.brick-course h3{font-size:13px;margin:7px 0 0;color:var(--muted)}
+.brick-course-tiles{display:flex;flex-wrap:wrap;gap:12px}
+.brick-course-tiles .brick-tile{flex:0 1 240px;width:100%}
+@media(max-width:560px){.brick-course{grid-template-columns:1fr;gap:6px}}
+.brick-frame{position:relative;width:fit-content;max-width:100%;margin-top:8px}.brick-frame #largePhoto{display:block;margin:0;object-fit:fill}
+.photo-point{position:absolute;width:21px;height:21px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #161616;transform:translate(-50%,-50%);pointer-events:none}
+.photo-outline{position:absolute;border:2px solid #fff;box-shadow:0 0 0 1px #161616;pointer-events:none}
+.brick-frame[data-editing]{cursor:crosshair}
+.y-reference{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.y-reference output{margin:0}
+.motion-row label{max-width:11rem}.map-section{margin-top:24px}.map-section .summary{margin:0}
+.map-section .tile img{object-fit:cover}.map-section .tile{aspect-ratio:4/3}
+.map-section .tile.empty{aspect-ratio:auto;min-height:94px}
+.baseline-controls{border-bottom:1px solid var(--line);margin:12px 0;padding-bottom:10px}
+.baseline-controls p{overflow-wrap:anywhere}.baseline-controls .actions{margin-top:6px}
+.section-toggle{margin:12px 0;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.section-toggle>summary{font-weight:600;color:var(--text);padding:12px 14px}
+.section-toggle[open]>summary{padding-bottom:8px}
+.section-toggle>section,.section-toggle>.actions,.section-toggle>.form-panel{margin:0 12px 12px}
+.latest-result{display:block;background:var(--slot);border-radius:8px;border:1px solid var(--line);padding:9px 12px;margin-top:8px;font-size:16px;font-weight:650}
+.latest-result[data-result="good"]{color:var(--ok);border-color:var(--ok);background:var(--ok-fill)}
+.latest-result[data-result="bad"]{color:var(--bad);border-color:var(--bad);background:var(--bad-fill)}
+.secondary-tools{margin-top:12px;padding-top:6px}.secondary-tools>summary{margin-bottom:8px}
+.main-actions{margin-top:10px}.main-actions .primary{font-weight:650}
+.tap-analysis{flex:1 0 100%;margin:8px 0}.tap-score-result{margin:0 0 6px;font-weight:600}
+.tap-score-result[data-result="good"]{color:var(--ok)}.tap-score-result[data-result="bad"]{color:var(--bad)}
+.tap-score-actions{display:flex;gap:8px;flex-wrap:wrap}.tap-analysis details{margin-top:8px}
+.tap-analysis form{display:flex;gap:6px;align-items:end;flex-wrap:wrap;margin-top:8px}
+.tap-analysis form label{width:5.6rem}
+.review-audio a{display:inline-block;margin:0 0 8px}
+.demo-camera{display:block;width:100%;height:100%;object-fit:contain}
+#printReport{display:none}
+@media(min-width:721px){
+  .workspace-controls{align-self:stretch;contain:size;max-height:none;scrollbar-gutter:stable}
+}
+@page{size:landscape;margin:12mm}
+@media print{
+  body{background:#fff;color:#18202a;font-size:11pt}
+  body>header,body>main{display:none}
+  #printReport{display:block}
+  #printReport p{color:#333;margin:4px 0;overflow-wrap:anywhere}
+  .print-cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5mm;margin-top:5mm}
+  .print-cell{break-inside:avoid;border:1px solid #b3bcc8;padding:3mm;border-radius:2mm}
+  .print-cell.good{border-color:#148047}.print-cell.bad{border-color:#c63636}
+  .print-cell.review{border-color:#9a6b00}.print-cell.visual{border-color:#245cce}
+  .print-cell img{display:block;width:100%;height:32mm;object-fit:contain;background:#eef1f4}
+  .print-cell h3{font-size:11pt;margin:2mm 0 0}
+}
+@media(max-width:720px){.workspace{display:block}.camera-pane{top:0;z-index:2;background:var(--bg);padding-bottom:6px}.camera{max-height:44dvh}.workspace-controls{max-height:none;overflow:visible;padding-top:12px}html{scroll-padding-top:calc(44dvh + 105px)}}
 
-<div id="photoStatus" class="feedback" role="status"></div><p class="hint">The map is saved in this browser. Each capture also downloads a PNG to this laptop.</p>
-<p id="positionStatus" class="hint" role="status">Waiting for sample positions…</p>
+.page-nav{position:sticky;top:0;z-index:5;display:flex;gap:6px;padding:10px max(20px,calc((100vw - 1352px)/2));background:var(--panel);border-bottom:1px solid var(--line)}
+.page-nav a{text-decoration:none;padding:10px 16px;border-radius:7px;color:var(--muted);font-weight:600}
+.page-nav a[aria-current=page]{background:var(--accent);color:#fff}
+.workspace{grid-template-columns:minmax(0,2fr) minmax(350px,1fr)}
+.workspace-controls{contain:none;overflow:visible;max-height:none;align-self:start;padding:0}
+.camera-pane{top:76px}.camera{max-height:calc(100dvh - 230px)}
+.operator-page{display:grid;gap:14px}.operator-page .control-card,.operator-page .form-panel{margin:0;padding:20px}
+.operator-page .control-card h2{margin-bottom:12px}
+.operator-page label+label{margin-top:14px}
+.operator-page .route-inputs label+label{margin-top:0}
+.operator-page .route-inputs{gap:12px}
+.current-operation{border-top:1px solid var(--line);margin-top:14px;padding-top:4px}
+.current-operation .actions{margin-top:10px}.current-operation p{margin:8px 0 0}
+.recording-shortcut{align-self:center;font-size:13px}
+.header-actions .poweroff-controls{margin:0}.header-actions .poweroff-controls .hint:empty{display:none}
+#tapClips li{padding:12px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr}
+#tapClips audio{width:100%}
+#tapRecordings h2{margin-bottom:10px}#tapRecordings:empty{display:block}
+.operator-page .operator-panel>summary{font-weight:650;color:var(--text)}
+#page-manual .motion-row{grid-template-columns:1fr 8rem}
+#cameraModeTools{margin:10px 0}
+#cameraModeTools label{min-width:200px}
+@media(max-width:1000px) and (min-width:721px){main{padding:16px}.workspace{grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:16px}.operator-page .control-card,.operator-page .form-panel{padding:15px}}
+@media(max-width:720px){.page-nav{padding:8px 12px;overflow:auto}.page-nav a{padding:9px 12px;white-space:nowrap}.workspace{display:block}.camera-pane{top:58px}.camera{max-height:39dvh}.workspace-controls{padding-top:16px}.current-operation{margin-top:8px}html{scroll-padding-top:calc(39dvh + 220px)}}
+@media print{.page-nav{display:none}}
+
+</style></head><body data-preview="__PREVIEW__">
+<header><div><div class="eyebrow">2.009 BLUE TEAM · INSPECTION PROTOTYPE</div><h1>Inspection control</h1></div><div class="header-actions"><span class="status" id="status" role="status">Connecting…</span><button id="newJob" type="button">Start new job</button><div class="poweroff-controls"><button class="stop-button" disabled="" id="poweroff" type="button">Shut down both Pis</button><p class="hint" id="poweroffStatus" role="status"></p></div></div></header><nav aria-label="Inspection pages" class="page-nav"><a data-page-link="setup" href="#setup">Setup</a><a data-page-link="manual" href="#manual">Manual</a><a data-page-link="automatic" href="#automatic">Automatic inspection</a></nav>
+<main>
+<p class="hint" id="jobStatus" role="status"></p>
+<dialog aria-describedby="newJobDescription" aria-labelledby="newJobTitle" id="newJobDialog">
+<h2 id="newJobTitle">Start a new job?</h2>
+<p id="newJobDescription">This clears the previous map, photos, tap recordings, reviews, and reference baseline from this browser.</p>
+<form class="job-actions" method="dialog">
+<button autofocus="" value="cancel">Cancel</button>
+<button class="stop-button" id="confirmNewJob" value="clear">Clear and start new job</button>
+</form>
+</dialog>
+<div class="workspace">
+<section aria-label="Live camera" class="camera-pane">
+<div class="camera"><video autoplay="" controls="" id="video" muted="" playsinline=""></video><canvas aria-label="Perspective-corrected camera view" class="corrected-video" hidden="" id="correctedVideo"></canvas><div class="overlay" id="overlay"><div id="message">Connecting…</div><small id="detail">Waiting for the robot camera.</small></div></div>
+<div class="camera-tools"><button aria-pressed="false" id="audioToggle" type="button">Listen to microphone</button><button id="start">Reconnect video</button><label class="lens-option" hidden="" id="lensOption"><input checked="" id="lensToggle" type="checkbox"/>Lens correction</label><button hidden="" id="resume">Resume video</button><p class="hint" id="linkStatus" role="status">Checking camera connection…</p></div><div class="camera-tools" hidden="" id="cameraModeTools"><label>Raw camera mode<select id="cameraMode"></select></label><p class="hint" id="cameraModeStatus" role="status"></p></div>
+<audio id="microphone"></audio><p class="hint" id="audioStatus" role="status">Microphone playback is off.</p>
+<div aria-live="polite" class="system-status"><span id="robotState">Camera unit · checking</span><span id="roofState">Winch controller · checking</span><span id="exchangeState">Data link · checking</span></div>
+<section class="current-operation"><div class="actions"><button class="stop-button" id="stopAll" type="button">Stop all</button><button class="stop-button" disabled="" hidden="" id="tapStop" type="button">Stop tap</button><button class="stop-button" hidden="" id="inspectionCancel" type="button">Cancel step</button></div><p class="hint" id="inspectionStatus" role="status">Ready to simulate the next step.</p><p class="hint" id="inspectionSaveStatus" role="status"></p></section></section>
+<div class="workspace-controls"><div aria-label="Setup" class="operator-page" data-page="setup" hidden="" id="page-setup"><section class="control-card"><h2>Operation mode</h2><label>Inspection mode<select id="inspectionMode"><option value="simulation">Simulate</option><option value="hardware">Use hardware</option></select></label></section><section class="control-card" id="tapStrengthTools"><h2>Tap strength</h2>
+<label>Peak PWM <output id="tapStrengthValue">210 / 255 · 82%</output><input id="tapStrength" max="255" min="0" step="1" type="range" value="210"/></label>
+<label>Peak duration <output id="tapDurationValue">50 ms</output><input id="tapDuration" max="150" min="10" step="5" type="range" value="50"/></label>
+<p class="hint">Compare 50, 75, and 100 ms at the same PWM. Each peak is followed by a 30 ms hold. Longer pulses add heat. Record a new baseline after changing settings.</p>
+<div class="actions"><button disabled="" id="strengthTap" type="button">Test one tap</button><button id="strengthDefault" type="button">Reset defaults</button><a class="recording-shortcut" href="#manual">Open audio recordings</a></div>
+<p class="hint" id="strengthStatus" role="status"></p>
+</section><section class="control-card" id="winchTuningTools"><h2>Winch pulse settings</h2>
+<p class="hint">Set the first pulse for measured moves and the pulse for short manual jogs. Adjust, then apply.</p>
+<label>Up pulse <output id="winchUpPulseValue">400 ms</output><input id="winchUpPulse" min="10" max="1500" step="10" type="range" value="400"/></label>
+<label>Down pulse <output id="winchDownPulseValue">250 ms</output><input id="winchDownPulse" min="10" max="1500" step="10" type="range" value="250"/></label>
+<label class="review-flag"><input checked="" id="winchAdaptive" type="checkbox"/>Adjust later pulses from encoder feedback</label>
+<p class="hint">Turn this off to repeat the chosen pulse duration. Position feedback still ends the move at its target.</p>
+<details class="secondary-tools"><summary>Correction pulses and settling</summary>
+<h3>Up</h3>
+<label>Minimum correction pulse <output id="winchUpMinValue">80 ms</output><input id="winchUpMin" min="10" max="1500" step="10" type="range" value="80"/></label>
+<label>Maximum correction pulse <output id="winchUpMaxValue">600 ms</output><input id="winchUpMax" min="10" max="1500" step="10" type="range" value="600"/></label>
+<label>Wait after each pulse <output id="winchUpSettleValue">250 ms</output><input id="winchUpSettle" min="50" max="2000" step="50" type="range" value="250"/></label>
+<h3>Down</h3>
+<label>Minimum correction pulse <output id="winchDownMinValue">40 ms</output><input id="winchDownMin" min="10" max="1500" step="10" type="range" value="40"/></label>
+<label>Maximum correction pulse <output id="winchDownMaxValue">250 ms</output><input id="winchDownMax" min="10" max="1500" step="10" type="range" value="250"/></label>
+<label>Wait after each pulse <output id="winchDownSettleValue">700 ms</output><input id="winchDownSettle" min="50" max="2000" step="50" type="range" value="700"/></label>
+<p class="hint">If short corrections fail to move the winch, raise the minimum correction pulse or turn off adaptation. More settling time waits longer before measuring the result.</p>
+</details><div class="actions"><button disabled="" id="winchTuningSave" type="button">Apply winch settings</button><a href="#manual">Open manual controls</a></div>
+<p class="hint" id="winchTuningStatus" role="status">Waiting for saved winch settings…</p></section><section class="control-card"><h2>Reference recording</h2><div class=""><p class="hint" id="baselineStatus"></p>
+<div class="actions"><button disabled="" id="recordBaseline" type="button">Record baseline</button>
+<a class="recording-shortcut" href="#manual">Open audio recordings</a></div>
+<p class="hint" id="baselineFeedback" role="status"></p></div><div class="actions"><button id="chooseBaseline" type="button">Import baseline WAV + CSV</button><input accept=".wav,.csv,audio/wav,text/csv" hidden="" id="baselineFiles" multiple="" type="file"/></div><p class="hint" id="baselineFileFeedback" role="status"></p></section><section class="control-card"><h2>Wall reference</h2><div class="actions"><button disabled="" id="zeroY" title="Use at the roof to set the reference for future moves and captures." type="button">Set Y zero here</button><button id="routeReference" type="button">Set first brick here</button></div><p class="hint" id="brickReferenceStatus" role="status"></p><p class="hint">Set Y zero at your starting reference, then align the tapper with the first brick before saving its address.</p><details class="secondary-tools" hidden="" id="pulleySetup" open="">
+<summary>Pulley setup</summary>
+<label class="review-flag"><input id="timedY" type="checkbox"/>Estimate Y using winch time</label>
+<label>Estimated winch speed (in/s)<input id="timedSpeed" max="20" min="0.1" required="" step="any" type="number" value="1"/></label>
+<p class="hint">Timed Y uses the duration of each relay pulse. Distances, the lower limit, and brick addresses are approximate. Check wall clearance and camera alignment.</p>
+<p class="hint">Raw pulley count <output id="pulleyCount">—</output>.</p>
+<label>Cable travel per revolution (in)<input id="pulleyTravel" max="500" min="0.1" required="" step="any" type="number" value="6.283185"/></label>
+<label class="review-flag"><input id="pulleyHoldDown" type="checkbox"/>Down stops when the relay releases.</label>
+<label class="review-flag"><input id="pulleyHoldUp" type="checkbox"/>Up stops when the relay releases.</label>
+<p class="hint">Unchecked directions send an explicit Stop after each measured jog.</p>
+<button disabled="" id="pulleySave" type="button">Save pulley setup</button>
+</details></section><section class="control-card" id="routePlanner">
+<h2>Inspection route</h2>
+<div class="route-inputs">
+<label>Tap location<select id="brickTapZone"><option value="center">Center</option><option value="edge">Edge</option></select></label>
+<label hidden="" id="previewSlipLabel">Simulated Y slip (in)<input id="previewSlip" max="3" min="-3" step="0.1" type="number" value="0"/></label>
 </div>
+<label>Vertical coverage<select id="routeCoverage"><option value="count">Number of bricks</option><option value="limit">Down to lowest Y</option></select></label>
+<div class="route-inputs">
+<label id="routeRowsField">Bricks per column<input id="routeRows" min="1" required="" step="1" type="number" value="3"/></label>
+<label>Columns<input id="routeColumns" max="12" min="1" required="" step="1" type="number" value="2"/></label>
+<label>Horizontal brick spacing (in)<input id="routeXSpacing" max="24" min="0.1" required="" step="any" type="number"/></label>
+<label>Vertical brick spacing (in)<input id="routeYSpacing" max="24" min="0.1" required="" step="any" type="number"/></label>
+<label>Lowest Y (in from roof zero)<input aria-describedby="routeLimitHelp" id="routeYLimit" min="0" step="any" type="number"/></label>
+</div>
+<p class="hint" id="routeLimitHelp">For the lowest Y, use the roof-to-ground distance minus clearance for the payload and winch overrun.</p>
+<details class="secondary-tools"><summary>Calculate vertical spacing from a sample</summary>
+<div class="route-inputs">
+<label>Measured span (in)<input id="routeSampleSpan" min="0.1" required="" step="any" type="number"/></label>
+<label>Course intervals<input id="routeSampleIntervals" min="1" required="" step="1" type="number" value="3"/></label>
+</div>
+<p class="hint">From the center of the first brick to the center of the fourth is three intervals.</p>
+<button id="routeUseSample" type="button">Use calculated spacing</button>
+</details>
+<p class="hint">Center the tapper on the first brick. Measure spacing between brick centers, including the mortar joint. The route alternates down and up, and takes a photo and records three taps at each stop.</p>
+<p class="hint" id="setupRouteSummary" role="status"></p></section><details id="connectionDiagnostics"><summary>Connection diagnostics</summary><p class="diagnostic-addresses" id="deviceAddresses"></p><p class="hint" id="packetStatus"></p><div class="actions"><button id="stop">Stop video</button><button id="export">Save connection log</button></div><div class="metrics"><div><span>Received video</span><strong id="rate">—</strong></div><div><span>Frames / sec</span><strong id="fps">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div><div><span>Last frame</span><strong id="age">—</strong></div><div><span>Interruptions</span><strong id="drops">0</strong></div><div><span>Interrupted time</span><strong id="downtime">0 s</strong></div></div><p class="hint" id="route">Private Ethernet connection</p><canvas aria-label="Video availability timeline" id="history"></canvas><div aria-label="Connection event log" id="events"></div></details></div><div aria-label="Manual" class="operator-page" data-page="manual" id="page-manual"><section aria-labelledby="motionTitle" class="control-card">
+<h2 id="motionTitle">Move the robot</h2>
+<div class="motion-row">
+<h3>X · Across <span class="simulation" id="xMode">Checking</span></h3>
+<output aria-label="Current X position" id="xReadout">—</output>
+<label>X step (in)<input id="xDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label>
+<div class="actions"><button disabled="" id="moveLeft" type="button">← Left</button><button disabled="" id="moveRight" type="button">Right →</button><button class="stop-button" disabled="" id="stopX" type="button">Stop X</button></div>
+<p class="hint" id="xMovementStatus" role="status"></p>
+</div>
+<div class="motion-row">
+<h3>Y · Down from roof <span class="simulation" id="yMode">Checking</span></h3>
+<div class="y-reference"><output aria-label="Current Y position" id="yReadout">—</output><button disabled="" id="manualZeroY" type="button">Set Y zero here</button></div>
+<label>Y step (in)<input id="yDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label>
+<div class="actions"><button disabled="" id="moveYUp" type="button">↑ Up</button><button disabled="" id="moveYDown" type="button">↓ Down</button><button class="stop-button" disabled="" hidden="" id="stopY" type="button">Stop Y</button></div>
+<p class="hint" id="yMovementStatus" role="status"></p>
+</div>
+</section><section class="control-card"><h2>Tap and record</h2><div class="actions"><button class="primary" disabled="" id="tapOnce" type="button">Tap once</button><button disabled="" id="tapBurst" type="button">Tap 3 times (2 Hz)</button><button class="primary" id="brickTapHere" type="button">Record 3 taps + photo</button></div><p class="hint">Records three taps at 2 Hz and saves the photo, audio, and score at the current X and Y.</p><p class="feedback" id="stationaryStatus" role="status"></p><p class="hint" id="tapStatus" role="status">Waiting for the robot tap controller…</p></section><section aria-label="Capture and position">
+<div class="form-panel"><h2>Take a photo</h2><p class="hint">Capture the current camera view at the displayed X and Y. Open the saved photo in the brick map below.</p>
+<div class="fields"><label>X position (in)<input id="encoderX" readonly="" type="number"/></label><label>Y position (in)<input id="encoderY" readonly="" type="number"/></label><label class="wide">Brick condition<select id="brickStatus"><option value="unknown">Unclassified</option><option value="good">Good · green</option><option value="bad">Bad · red</option></select></label></div>
+<button class="primary" disabled="" id="photo" type="button">Take photo and save to map</button><div class="feedback" id="photoStatus" role="status"></div>
+<p class="hint" id="positionStatus">Waiting for position…</p>
+</div>
+</section><section class="control-card" id="tapRecordings"><h2>Audio recordings</h2>
+<p class="hint" id="recordingsEmpty">Tap once or record three taps to add a recording. Play it here or download the WAV.</p>
+<p class="hint" id="audioSaveStatus" role="status">Recordings are saved automatically in this browser for this job.</p>
+<ol id="tapClips"></ol>
+<p class="hint">Inspection-route recordings are also available by opening a brick on the map.</p></section><details aria-label="Inspection controls" class="control-card operator-panel"><summary>Short winch jogs</summary><p class="hint"><span class="simulation" id="winchMode">Winch controls</span> <span id="winchHint"></span></p><div class="actions operator-bar"><button disabled="" id="winchStart" type="button">Arm winch</button><button disabled="" id="winchUp" type="button">↑ Up</button><button disabled="" id="winchDown" type="button">↓ Down</button><button class="stop-button" disabled="" id="winchStop" type="button">Stop winch</button></div>
+<details class="secondary-tools"><summary>Relay status</summary><div aria-label="Relay contacts" class="relay-lights"><span class="relay-light" id="relay1">CH1 · Stop</span><span class="relay-light" id="relay2">CH2 · Start</span><span class="relay-light" id="relay3">CH3 · Up</span><span class="relay-light" id="relay4">CH4 · Down</span></div></details><p class="hint" id="winchFeedback" role="status">Waiting for controller…</p>
+</details></div><div aria-label="Automatic inspection" class="operator-page" data-page="automatic" hidden="" id="page-automatic"><section aria-labelledby="inspectionTitle" class="control-card">
+<h2 id="inspectionTitle">Automatic inspection</h2><p aria-live="polite" class="hint" id="routeSummary"></p><div class="actions"><button id="routeRun" type="button">Simulate route</button><a class="recording-shortcut" href="#setup">Edit route in Setup</a></div>
+<output aria-label="Latest similarity result" class="latest-result" id="latestTapResult">No brick scored yet</output>
+<label>Lower per step (in)<input id="autoStepDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label><div class="actions main-actions"><button class="primary" id="inspectionRun" type="button">Run next step</button><button hidden="" id="inspectionReviewLast" type="button">Review last step</button><button hidden="" id="inspectionRetrySave" type="button">Retry saving</button></div>
+<div class="actions main-actions"></div>
+<details class="secondary-tools"><summary>Step options</summary>
+<label>Recording<select id="inspectionTaps"><option value="burst">3 taps at 2 Hz</option><option value="visual">Visual only</option></select></label>
+<p class="hint">Each step lowers, captures a photo, then taps. <span hidden="" id="hardwareDistanceNotice">In hardware mode, the pulley encoder measures the descent.</span></p>
+</details>
+</section><section aria-labelledby="reviewTitle" class="control-card" hidden="" id="inspectionReview">
+<div class="dialog-head"><h2 id="reviewTitle">Review this cell</h2><button id="reviewClose" type="button">Close</button></div>
+<p class="hint" id="reviewPosition"></p>
+<div class="tap-analysis" hidden="" id="reviewTapAnalysis"></div>
+<img alt="Captured wall at this inspection stop" class="review-preview" id="reviewPreview"/>
+<p class="hint" id="reviewPrompt"></p>
+<details class="secondary-tools" id="reviewRecording"><summary>Listen or download WAV</summary><div class="review-audio" id="reviewAudio"></div></details>
+<details class="secondary-tools"><summary>Notes and labels</summary>
+<div class="actions">
+<button id="reviewSimilar" type="button">Similar · green</button><button id="reviewDifferent" type="button">Different · yellow</button>
+<button id="reviewVisual" type="button">Visual only · blue</button><button id="reviewUnknown" type="button">Use automatic result</button>
+</div>
+<label>Notes<textarea id="reviewNotes" maxlength="2000" rows="2"></textarea></label>
+<label class="review-flag"><input id="reviewFlag" type="checkbox"/>Flag for closer look</label>
+<div class="actions"><button id="reviewSaveNotes" type="button">Save notes and flag</button></div>
+<p class="hint" id="reviewStatus" role="status"></p>
+</details>
+</section></div></div></div>
+<section aria-labelledby="mapTitle" class="map-section">
+<div class="map-head"><div><h2 id="mapTitle">Inspection map</h2><p class="hint" id="mapUnits">X increases right · Y increases downward from roof · inches</p></div>
+<div aria-label="Map view" class="tabs"><button aria-pressed="true" id="mapTab">Brick map</button><button aria-pressed="false" id="galleryTab">All photos</button></div></div>
+<div class="summary"><span class="count"><strong id="positionCount">0</strong> cells</span><span class="count"><strong id="totalCount">0</strong> photos</span><span class="count"><strong id="flaggedCount">0</strong> flagged</span></div>
+<div class="hint" id="mapState" role="status"></div>
+<div class="map-wrap" id="mapWrap"><div class="map-grid" id="mapGrid"></div></div><div class="gallery" hidden="" id="gallery"></div>
+<div class="legend"><span>Similar · below 10</span><span class="bad-key">Dissimilar · above 10</span><span class="empty-key">Unclassified</span></div>
+<section aria-labelledby="dialogTitle" class="control-card" hidden="" id="photoDialog">
+<div class="dialog-head"><h2 id="dialogTitle">Brick photo</h2><button id="closeDialog" type="button">Close</button></div>
+<div class="tap-analysis" hidden="" id="cellTapAnalysis"></div>
+<div class="brick-frame" id="brickFrame"><img alt="Selected full camera frame" id="largePhoto"/><span class="photo-outline" hidden="" id="photoOutline"></span><span class="photo-point" hidden="" id="photoPoint"></span></div>
+<div class="actions"><button id="editPhotoGuide" type="button">Mark brick and tap point</button><button hidden="" id="cancelPhotoGuide" type="button">Cancel marking</button></div>
+<p class="dialog-meta" id="dialogMeta"></p>
+<details class="secondary-tools" id="cellRecording"><summary>Listen or download WAV</summary><div class="review-audio" id="cellAudio"></div></details><p class="hint" id="cellNotes"></p>
+<div class="actions"><button class="good" id="markGood">Mark good</button><button class="bad" id="markBad">Mark bad</button><a href="#" id="downloadPhoto">Download photo</a></div>
+<div aria-label="All photos at this position" class="thumbs" id="retakes"></div><p class="hint" id="dialogStatus" role="status"></p>
 </section>
-<section aria-label="Inspection map">
-<div class="summary" aria-live="polite"><span class="count"><strong id="totalCount">0</strong> photos</span><span class="count"><strong id="positionCount">0</strong> positions</span><span class="count good-text"><strong id="goodCount">0</strong> good</span><span class="count bad-text"><strong id="badCount">0</strong> bad</span><button id="exportMap">Back up map</button><button id="importMap">Import map</button><input id="importFile" type="file" accept=".json,application/json" hidden></div>
-<div class="map-head"><div><h2>Inspection map</h2><p class="hint">X increases right · Y increases upward · encoder counts</p></div><div class="tabs" aria-label="Map view"><button id="mapTab" aria-pressed="true">X / Y grid</button><button id="galleryTab" aria-pressed="false">All photos</button></div></div>
-<div id="mapState" role="status" class="hint"></div>
-<div id="mapWrap" class="map-wrap"><div id="mapGrid" class="map-grid"></div></div><div id="gallery" class="gallery" hidden></div>
-<div class="legend"><span>Good</span><span class="bad-key">Bad</span><span class="empty-key">Not photographed</span></div><p class="hint">The grid uses captured coordinate values as rows and columns. Cells are equal-sized; distance is not drawn to scale. Each position shows its latest photo and label.</p>
+<details class="section-toggle" id="fileTools"><summary>Files and exports</summary>
+<div class="actions">
+<button disabled="" id="printMap" type="button">Print / save PDF</button><button disabled="" id="exportPhotos" type="button">Download all photos</button><button id="exportMap">Back up map</button><button id="importMap">Import map</button><input accept=".json,application/json" hidden="" id="importFile" type="file"/></div>
+</details>
 </section>
-<details><summary>Connection diagnostics</summary><p id="deviceAddresses" class="diagnostic-addresses"></p><p id="packetStatus" class="hint"></p><div class="actions"><button id="stop">Stop video</button><button id="export">Save connection log</button></div><div class="metrics"><div><span>Received video</span><strong id="rate">—</strong></div><div><span>Frames / sec</span><strong id="fps">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div><div><span>Last frame</span><strong id="age">—</strong></div><div><span>Interruptions</span><strong id="drops">0</strong></div><div><span>Interrupted time</span><strong id="downtime">0 s</strong></div></div><p id="route" class="hint">Private Ethernet connection</p><canvas id="history" aria-label="Video availability timeline"></canvas><div id="events" aria-label="Connection event log"></div></details>
-</main>
-<dialog id="photoDialog"><div class="dialog-head"><h2 id="dialogTitle">Brick photo</h2><button id="closeDialog" aria-label="Close photo">Close</button></div><img id="largePhoto" alt="Selected brick capture"><p id="dialogMeta" class="dialog-meta"></p><div class="actions"><button id="markGood" class="good">Mark good · green</button><button id="markBad" class="bad">Mark bad · red</button><a id="downloadPhoto" href="#">Download photo</a></div><div id="retakes" class="thumbs" aria-label="All photos at this position"></div><p id="dialogStatus" class="hint" role="status"></p></dialog>
+<dialog aria-describedby="poweroffDescription" aria-labelledby="poweroffTitle" id="poweroffDialog">
+<h2 id="poweroffTitle">Shut down both Pis?</h2>
+<p id="poweroffDescription">The robot Pi shuts down first, then the rooftop Pi. The live feed and dashboard will disconnect.</p>
+<form class="actions" method="dialog">
+<button autofocus="" type="submit" value="cancel">Cancel</button>
+<button class="stop-button" type="submit" value="poweroff">Shut down both Pis</button>
+</form>
+</dialog></main>
+<section aria-label="Printable inspection report" id="printReport"></section>
 <script src="/storage.js"></script>
+<script src="/tap-score.js"></script>
+<script src="/tap-analysis.js"></script>
 <script src="/player.js"></script>
 <script src="/dashboard.js"></script>
+<script src="/automatic.js"></script>
+<script src="/pages.js"></script>
 <script>
 (()=>{
 const el=id=>document.getElementById(id);
-let photos=[],selectedId=null,galleryMode=false,polling=false;
-const positionKey=p=>JSON.stringify([p.x,p.y]);
-const format=n=>Number(n).toString();
+const scoring=window.brickTapAnalysis;
+const storage=window.brickStorage;
+const jobStatusKey='brick-mapper-new-job-ready';
+let importing=false;
+let clearingJob=false;
+
+async function startNewJob(){
+ if(clearingJob)return;
+ if(window.blueInspection?.savingRecordings()){
+  throw new Error('Audio is still saving on this computer. Wait for saving to finish before starting a new job.');
+ }
+ if(importing||el('inspectionRun').disabled||el('inspectionRetrySave').disabled||
+    window.blueInspection?.tapping()||window.blueInspection?.movementBusy()||window.brickCamera?.busy()){
+  throw new Error('Wait for the current operation to finish before starting a new job.');
+ }
+ clearingJob=true;
+ el('newJob').disabled=true;
+ try{
+  await storage.clearJob(scoring.clearBaseline);
+  sessionStorage.setItem(jobStatusKey,'1');
+  location.reload();
+ }catch(error){
+  clearingJob=false;
+  el('newJob').disabled=false;
+  throw error;
+ }
+}
+const newJobDialog=el('newJobDialog');
+el('newJob').onclick=()=>{
+ newJobDialog.returnValue='cancel';
+ newJobDialog.showModal();
+};
+newJobDialog.addEventListener('close',async()=>{
+ if(newJobDialog.returnValue!=='clear')return;
+ try{await startNewJob();}
+ catch(error){el('jobStatus').textContent=error.message;}
+});
+window.addEventListener('storage',event=>{
+ if(event.key===storage.jobKey)location.reload();
+});
+if(sessionStorage.getItem(jobStatusKey)){
+ sessionStorage.removeItem(jobStatusKey);
+ el('jobStatus').textContent='New job ready. The previous inspection was cleared.';
+}
+let photos=[],selectedId=null,galleryMode=false,loadVersion=0;
+const checkedBursts=new Set();
+const hasInches=p=>Number.isFinite(p.x_inches)&&Number.isFinite(p.y_inches);
+const coords=p=>hasInches(p)?[Number(p.x_inches.toFixed(2)),Number(p.y_inches.toFixed(2))]:[p.x,p.y];
+const positionKey=p=>p.brick?window.brickStorage.brickKey(p.brick):JSON.stringify([hasInches(p),...coords(p)]);
+const brickLabel=p=>`Course ${p.brick.course} · Brick ${p.brick.column}`;
+const zoneLabel=p=>p.tap_zone==='edge'?'Edge':p.tap_zone==='center'?'Center':'Photo only';
+const coordinateText=p=>{
+ const [x,y]=coords(p);
+ const unit=hasInches(p)?'in':'counts';
+ return `X ${x} ${unit} · Y ${y} ${unit}${p.position_source==='outrigger-timed'?' estimated':''}`;
+};
+function cellResult(p){
+ const comparison=p.status==='unknown'&&scoring.result(p);
+ if(comparison&&comparison.status!=='unknown')return {status:comparison.status,label:comparison.status==='good'?'Similar':'Dissimilar'};
+ return {status:p.status,label:({good:p.classification_source==='tap-review'?'Similar':'Good',bad:'Bad',visual:'Visual only',review:'Different',unknown:'Unclassified'})[p.status]};
+}
+function tapScoreLabel(p){
+ const comparison=scoring.result(p);
+ if(comparison)return ` · difference ${comparison.value.toFixed(2)}`;
+ if(!p.tap_burst||!p.tap_audio?.length)return '';
+ return p.tap_analysis?' · Baseline needed':' · Score unavailable';
+}
 function tile(p,count=1){
- const button=document.createElement('button');button.type='button';button.className='tile filled '+p.status;
- button.setAttribute('aria-label',`${p.status} brick at X ${p.x}, Y ${p.y}, ${count} photo${count===1?'':'s'}`);
- const img=document.createElement('img');img.src=p.url;img.loading='lazy';img.alt=`Brick at X ${p.x}, Y ${p.y}`;
+ const result=cellResult(p);
+ const scoreLabel=tapScoreLabel(p);
+ const button=document.createElement('button');button.type='button';button.className='tile filled '+result.status;
+ button.setAttribute('aria-label',`${result.label}${scoreLabel} · ${coordinateText(p)} · ${count} photo${count===1?'':'s'}`);
+ const img=document.createElement('img');img.src=p.url;img.loading='lazy';img.alt=`Brick at ${coordinateText(p)}`;
  button.append(img);
- for(const [cls,text] of [['badge',p.status==='good'?'GOOD':'BAD'],['position',`X ${format(p.x)} · Y ${format(p.y)}`],...(count>1?[['retakes',`${count} photos`]]:[])]){const span=document.createElement('span');span.className=cls;span.textContent=text;button.append(span);}
+ const badges=count>1?[['retakes',`${count} photos`]]:[];
+ for(const [cls,text] of [['badge',result.label+scoreLabel+(p.flagged?' · Flagged':'')],['position',coordinateText(p)],...badges]){const span=document.createElement('span');span.className=cls;span.textContent=text;button.append(span);}
  button.onclick=()=>openPhoto(p.id);return button;
+}
+function brickTile(captures){
+ const latest=captures.at(-1);
+ const tests=captures.filter((p,index)=>captures.findLastIndex(other=>p.tap_zone===other.tap_zone)===index);
+ const target=tests.find(p=>cellResult(p).status==='bad')??latest;
+ const button=document.createElement('button');button.type='button';
+ button.className='tile filled brick-tile '+cellResult(target).status;
+ const picture=document.createElement('div');picture.className='brick-image';
+ const image=document.createElement('img');image.src=target.url;image.loading='lazy';image.alt=brickLabel(latest);
+ if(target.brick_crop){
+  const [x,y,w,h]=target.brick_crop;
+  picture.style.aspectRatio=String(w*target.width/(h*target.height));
+  Object.assign(image.style,{position:'absolute',width:`${100/w}%`,height:`${100/h}%`,left:`${-100*x/w}%`,top:`${-100*y/h}%`});
+ }
+ picture.append(image);
+ const details=document.createElement('div');details.className='brick-tile-meta';
+ const name=document.createElement('strong');name.textContent=brickLabel(latest);
+ const coordinate=document.createElement('span');coordinate.textContent=coordinateText(target);
+ details.append(name,coordinate);
+ for(const test of tests){
+  const result=document.createElement('div');
+  result.textContent=`${zoneLabel(test)} · ${cellResult(test).label}${tapScoreLabel(test)}`;
+  details.append(result);
+ }
+ button.append(picture,details);button.onclick=()=>openPhoto(target.id);
+ return button;
 }
 function render(){
  const positions=new Map();for(const p of photos){const k=positionKey(p);if(!positions.has(k))positions.set(k,[]);positions.get(k).push(p);}
+ const lastScored=photos.findLast(photo=>scoring.result(photo));
+ const comparison=lastScored?scoring.result(lastScored):null;
+ el('latestTapResult').textContent=comparison?scoring.scoreText(comparison):'No brick scored yet';
+ el('latestTapResult').dataset.result=comparison?.status??'';
+ const useInches=photos.some(hasInches);
+ const bricks=[...positions.values()].filter(list=>list[0].brick);
+ const mapped=photos.filter(p=>hasInches(p)===useInches);
  el('totalCount').textContent=photos.length;el('positionCount').textContent=positions.size;
- el('goodCount').textContent=photos.filter(p=>p.status==='good').length;el('badCount').textContent=photos.filter(p=>p.status==='bad').length;
+ el('flaggedCount').textContent=[...positions.values()].filter(list=>list.at(-1).flagged).length;
+ el('printMap').disabled=el('exportPhotos').disabled=photos.length===0;
+ el('mapUnits').textContent=useInches||!photos.length
+  ? 'Inches · X increases right · Y increases downward'+(mapped.length<photos.length?' · Earlier count-only captures are in All photos.':'')
+  : 'Earlier captures · encoder counts';
  el('mapWrap').hidden=galleryMode;el('gallery').hidden=!galleryMode;
  el('mapTab').setAttribute('aria-pressed',String(!galleryMode));el('galleryTab').setAttribute('aria-pressed',String(galleryMode));
  const grid=el('mapGrid');grid.replaceChildren();el('gallery').replaceChildren();
- if(!photos.length){const empty=document.createElement('div');empty.className='empty-state';empty.textContent='No photos on this laptop yet. Choose Good or Bad and capture your first photo.';grid.append(empty);el('gallery').append(empty.cloneNode(true));return;}
- for(const p of [...photos].reverse())el('gallery').append(tile(p));
- const xs=[...new Set(photos.map(p=>p.x))].sort((a,b)=>a-b),ys=[...new Set(photos.map(p=>p.y))].sort((a,b)=>b-a);
- if(xs.length*ys.length>2500){grid.textContent='This grid has more than 2,500 coordinate combinations. Use All photos to browse the captures.';return;}
- grid.style.gridTemplateColumns=`65px repeat(${xs.length}, 150px)`;
+ grid.classList.toggle('by-course',bricks.length>0);
+ grid.style.gridTemplateColumns='';
+ if(!photos.length){const empty=document.createElement('div');empty.className='empty-state';empty.textContent='No photos saved yet. Run an inspection step or capture a photo.';grid.append(empty);el('gallery').append(empty.cloneNode(true));return;}
+ if(galleryMode)for(const p of [...photos].reverse())el('gallery').append(tile(p));
+ if(bricks.length){
+  el('mapUnits').textContent='Inspected bricks grouped by course, left to right. Each tile shows its measured X and Y.'
+    +(photos.some(p=>!p.brick)?' Unmapped captures are in All photos.':'');
+  const sorted=bricks.sort(([a],[b])=>a.brick.source.localeCompare(b.brick.source)
+    ||a.brick.course-b.brick.course||a.brick.column-b.brick.column);
+  const mixed=sorted[0][0].brick.source!==sorted.at(-1)[0].brick.source;
+  let previousCourse,tiles;
+  for(const list of sorted){
+   const {source,course}=list[0].brick;
+   const key=`${source}:${course}`;
+   if(previousCourse!==key){
+    const row=document.createElement('section');row.className='brick-course';
+    const title=document.createElement('h3');title.textContent=`${mixed&&source==='preview'?'Sample ':''}Course ${course}`;
+    tiles=document.createElement('div');tiles.className='brick-course-tiles';
+    row.append(title,tiles);grid.append(row);previousCourse=key;
+   }
+   tiles.append(brickTile(list));
+  }
+  return;
+ }
+ const xs=[...new Set(mapped.map(p=>coords(p)[0]))].sort((a,b)=>a-b);
+ const ys=[...new Set(mapped.map(p=>coords(p)[1]))].sort((a,b)=>useInches?a-b:b-a);
+ grid.style.gridTemplateColumns=`58px repeat(${xs.length}, minmax(150px, 240px))`;
  const axis=(text,corner=false)=>{const d=document.createElement('div');d.className='axis'+(corner?' corner':'');d.textContent=text;return d;};
- grid.append(axis('Y ↑ / X →',true));for(const x of xs)grid.append(axis(format(x)));
- for(const y of ys){grid.append(axis(format(y)));for(const x of xs){const list=positions.get(JSON.stringify([x,y]));if(list){grid.append(tile(list[list.length-1],list.length));}else{const empty=document.createElement('div');empty.className='tile empty';empty.textContent='No photo';empty.setAttribute('aria-label',`No photo at X ${x}, Y ${y}`);grid.append(empty);}}}
+ const corner=axis(useInches?'Y ↓ / X →':'Y ↑ / X →',true);
+ grid.append(corner);
+ if(xs.length*ys.length>2500){
+  const put=(node,column,row)=>{node.style.gridColumn=column;node.style.gridRow=row;grid.append(node);};
+  const columnIndex=new Map(xs.map((x,index)=>[x,index+2]));
+  const rowIndex=new Map(ys.map((y,index)=>[y,index+2]));
+  for(const x of xs)put(axis(x),columnIndex.get(x),1);
+  for(const y of ys)put(axis(y),1,rowIndex.get(y));
+  for(const list of positions.values()){
+   const p=list.at(-1);if(hasInches(p)!==useInches)continue;
+   const [x,y]=coords(p);put(tile(p,list.length),columnIndex.get(x),rowIndex.get(y));
+  }
+  return;
+ }
+ for(const x of xs)grid.append(axis(x));
+ for(const y of ys){grid.append(axis(y));for(const x of xs){const list=positions.get(JSON.stringify([useInches,x,y]));if(list){grid.append(tile(list.at(-1),list.length));}else{const empty=document.createElement('div');empty.className='tile empty map-cell';empty.textContent='No capture';empty.setAttribute('aria-label',`No capture at X ${x}, Y ${y}`);grid.append(empty);}}}
 }
 async function load(){
- if(polling)return;
- polling=true;
- try{photos=await window.brickStorage.list();render();el('mapState').textContent='';}
- catch(error){el('mapState').textContent='Could not open this browser’s saved map: '+error.message;}
- finally{polling=false;}
+ const version=++loadVersion;
+ try{
+  const saved=await window.brickStorage.list();
+  if(version!==loadVersion)return;
+  photos=saved;render();renderSelectedTitle();el('mapState').textContent='';
+  let updatedAny=false;
+  for(const photo of saved){
+   if(photo.tap_analysis||!photo.tap_burst||!photo.tap_audio?.length||checkedBursts.has(photo.id))continue;
+   checkedBursts.add(photo.id);
+   const analysis=scoring.calculate(photo.tap_audio[0]);
+   if(!analysis)continue;
+   const updated=await window.brickStorage.updateTapAnalysis(photo.id,analysis,{ifMissing:true});
+   if(version!==loadVersion)continue;
+   photos=photos.map(item=>item.id===photo.id?updated:item);
+   updatedAny=true;
+  }
+  if(updatedAny&&version===loadVersion){render();renderSelectedTitle();}
+ }catch(error){if(version===loadVersion)el('mapState').textContent='Could not open this browser’s saved map: '+error.message;}
+}
+function renderSelectedTitle(){
+ const p=photos.find(p=>p.id===selectedId);if(!p)return;
+ el('dialogTitle').textContent=p.brick?`${brickLabel(p)} · ${zoneLabel(p)}${p.tap_zone?' tap':''}`:`${coordinateText(p)} · ${cellResult(p).label}`;
+}
+let guideClicks=null;
+function paintGuide(point,crop){
+ const marker=el('photoPoint'), outline=el('photoOutline');
+ marker.hidden=!point;outline.hidden=!crop;
+ if(point){marker.style.left=`${100*point[0]}%`;marker.style.top=`${100*point[1]}%`;}
+ if(crop){const [x,y,w,h]=crop;Object.assign(outline.style,{left:`${100*x}%`,top:`${100*y}%`,width:`${100*w}%`,height:`${100*h}%`});}
+}
+function finishGuide(){
+ guideClicks=null;delete el('brickFrame').dataset.editing;el('cancelPhotoGuide').hidden=true;
 }
 function showSelected(){
  const p=photos.find(p=>p.id===selectedId);if(!p)return;
- el('dialogTitle').textContent=`X ${format(p.x)} · Y ${format(p.y)} · ${p.status.toUpperCase()}`;
+ renderSelectedTitle();
+ finishGuide();
  el('largePhoto').src=p.url;
+ paintGuide(p.tap_point,p.brick_crop);
  el('downloadPhoto').href=p.url;el('downloadPhoto').download=p.name;
- const source=p.position_source==='simulated-rooftop'?'Sample encoder position':'Manual encoder position';
- el('dialogMeta').textContent=`${new Date(p.captured_at).toLocaleString()} · ${p.width} × ${p.height} · ${source} / manual label · ${p.name}`;
+ const source=positionDetails(p);
+ el('dialogMeta').textContent=`${coordinateText(p)} · ${new Date(p.captured_at).toLocaleString()} · ${source}${Number.isInteger(p.tap_pwm)?' · Peak PWM '+p.tap_pwm+'/255':''}${p.simulated?' · Simulated cycle':''}`;
+ window.brickStorage.showTapRecordings(el('cellAudio'),p);
+ el('cellRecording').hidden = !p.tap_audio?.length;
+ scoring.show(el('cellTapAnalysis'),p,async (analysis,options)=>{
+  await window.brickStorage.updateTapAnalysis(p.id,analysis,options);
+  await load();
+ });
+ el('cellNotes').textContent=[p.flagged?'Flagged for a closer look':'',p.notes].filter(Boolean).join(' · ');
+ for(const button of ['markGood','markBad'])el(button).hidden=['tap-review','pending'].includes(p.classification_source);
  el('markGood').setAttribute('aria-pressed',String(p.status==='good'));el('markBad').setAttribute('aria-pressed',String(p.status==='bad'));
  el('retakes').replaceChildren();const list=photos.filter(other=>positionKey(other)===positionKey(p));
- for(const item of list){const b=document.createElement('button');b.setAttribute('aria-label',`${item.status} capture at ${new Date(item.captured_at).toLocaleTimeString()}`);b.setAttribute('aria-pressed',String(item.id===p.id));const img=document.createElement('img');img.src=item.url;img.alt=item.status;b.append(img);b.onclick=()=>{selectedId=item.id;showSelected();};el('retakes').append(b);}
+ for(const item of list){const b=document.createElement('button');b.setAttribute('aria-label',`${item.brick?zoneLabel(item):item.status} capture at ${new Date(item.captured_at).toLocaleTimeString()}`);b.setAttribute('aria-pressed',String(item.id===p.id));const img=document.createElement('img');img.src=item.url;img.alt='';b.append(img,item.brick?zoneLabel(item):item.status);b.onclick=()=>{selectedId=item.id;showSelected();};el('retakes').append(b);}
 }
-function openPhoto(id){selectedId=id;el('dialogStatus').textContent='';showSelected();el('photoDialog').showModal();}
+el('editPhotoGuide').onclick=()=>{
+ guideClicks=[];el('brickFrame').dataset.editing='';el('cancelPhotoGuide').hidden=false;
+ el('dialogStatus').textContent='Click where the tapper contacts the wall, then click two opposite corners of the brick.';
+};
+el('cancelPhotoGuide').onclick=()=>{showSelected();el('dialogStatus').textContent='';};
+el('largePhoto').onclick=async event=>{
+ if(!guideClicks||!selectedId)return;
+ const {left,top,width,height}=event.currentTarget.getBoundingClientRect();
+ guideClicks.push([(event.clientX-left)/width,(event.clientY-top)/height]);
+ if(guideClicks.length===1){paintGuide(guideClicks[0],null);el('dialogStatus').textContent='Click the first corner of the brick.';return;}
+ if(guideClicks.length===2){el('dialogStatus').textContent='Click the opposite corner of the brick.';return;}
+ const [point,[x1,y1],[x2,y2]]=guideClicks;
+ const crop=[Math.min(x1,x2),Math.min(y1,y2),Math.abs(x2-x1),Math.abs(y2-y1)];
+ const id=selectedId;
+ finishGuide();
+ try{
+  const replacement=await window.brickStorage.updatePhotoGuide(id,{point,crop});
+  if(selectedId!==id)return;
+  photos=photos.map(photo=>photo.id===id?replacement:photo);render();showSelected();
+  el('dialogStatus').textContent='Brick crop and tap point saved.';
+ }catch(error){el('dialogStatus').textContent=error.message;}
+};
+function openPhoto(id){selectedId=id;el('dialogStatus').textContent='';showSelected();el('photoDialog').hidden=false;el('photoDialog').scrollIntoView({block:'nearest'});}
 async function mark(status){
  const id=selectedId;el('markGood').disabled=el('markBad').disabled=true;
  try{const result=await window.brickStorage.label(id,status);photos=photos.map(p=>p.id===id?result:p);render();showSelected();el('dialogStatus').textContent='Label saved on this laptop.';}
  catch(error){el('dialogStatus').textContent=error.message;}finally{el('markGood').disabled=el('markBad').disabled=false;}
 }
-el('markGood').onclick=()=>mark('good');el('markBad').onclick=()=>mark('bad');el('closeDialog').onclick=()=>el('photoDialog').close();
-el('photoDialog').onclick=event=>{if(event.target===el('photoDialog'))el('photoDialog').close();};
+el('markGood').onclick=()=>mark('good');el('markBad').onclick=()=>mark('bad');el('closeDialog').onclick=()=>{
+ finishGuide();window.brickStorage.clearAudio(el('cellAudio'));scoring.show(el('cellTapAnalysis'),{});el('photoDialog').hidden=true;selectedId=null;
+};
 el('mapTab').onclick=()=>{galleryMode=false;render();};el('galleryTab').onclick=()=>{galleryMode=true;render();};
+function positionDetails(p){
+ if(!hasInches(p))return p.position_source==='manual'?'Manual encoder counts':'Earlier sample encoder counts';
+ if(p.position_source==='outrigger-timed')return 'X encoder · Y estimated from winch time';
+ if(p.position_source==='outrigger-encoders')return `Encoder counts X ${p.x} · Y ${p.y} · roof zero set`;
+ const xSource=p.position_source==='x-encoder-rooftop'?'X encoder':'X simulated';
+ return xSource+' · Y simulated'+(p.y_zeroed?' · roof zero set':' · roof zero unset');
+}
+el('printMap').onclick=async()=>{
+ const report=el('printReport');
+ report.replaceChildren();
+ const title=document.createElement('h1');title.textContent='Brick Mapper · Inspection map';
+ const subtitle=document.createElement('p');subtitle.textContent=`${photos.length} photos · ${new Date().toLocaleDateString()}`;
+ const cells=document.createElement('div');cells.className='print-cells';
+ const images=[];
+ const sorted=[...photos].sort((a,b)=>Number(hasInches(b))-Number(hasInches(a))
+   || coords(a)[1]-coords(b)[1] || coords(a)[0]-coords(b)[0]);
+ for(const photo of sorted){
+  const outcome=cellResult(photo);
+  const cell=document.createElement('article');cell.className='print-cell '+outcome.status;
+  const img=document.createElement('img');img.src=photo.url;img.alt='Brick photo';
+  const location=document.createElement('h3');location.textContent=photo.brick?`${brickLabel(photo)} · ${zoneLabel(photo)} · ${coordinateText(photo)}`:coordinateText(photo);
+  const result=document.createElement('p');result.textContent=outcome.label+tapScoreLabel(photo)+(photo.flagged?' · Flagged':'')+' · '+positionDetails(photo);
+  cell.append(img,location,result);
+  if(photo.notes){const notes=document.createElement('p');notes.textContent=photo.notes;cell.append(notes);}
+  cells.append(cell);
+  images.push(img.decode().catch(()=>{}));
+ }
+ report.append(title,subtitle,cells);
+ await Promise.all(images);
+ window.print();
+};
+el('exportPhotos').onclick=async()=>{
+ const button=el('exportPhotos');button.disabled=true;
+ try{
+  await window.brickStorage.exportPhotos();
+ }catch(error){el('mapState').textContent='Could not download photos: '+error.message;}
+ finally{button.disabled=!photos.length;}
+};
 el('exportMap').onclick=async()=>{
  try{
   const data=await window.brickStorage.backup();
@@ -109,14 +598,21 @@ el('exportMap').onclick=async()=>{
 el('importMap').onclick=()=>el('importFile').click();
 el('importFile').onchange=async()=>{
  const file=el('importFile').files[0];if(!file)return;
+ importing=true;
  try{
-  const count=await window.brickStorage.restore(JSON.parse(await file.text()));
-  await load();el('mapState').textContent=`Imported ${count} photo${count===1?'':'s'} on this laptop.`;
+  const data=JSON.parse(await file.text());
+  const count=await window.brickStorage.restore(data);
+  scoring.restoreBaseline(data.tap_baseline);
+  await load();
+  window.dispatchEvent(new Event('brickcaptured'));
+  el('mapState').textContent=`Imported ${count} photo${count===1?'':'s'}${data.recordings?.length?' and restored audio recordings':''} on this laptop.`;
  }catch(error){el('mapState').textContent='Import failed: '+error.message;}
- finally{el('importFile').value='';}
+ finally{importing=false;el('importFile').value='';}
 };
 window.addEventListener('brickcaptured',load);
+window.addEventListener('brickanalysischange',()=>{render();renderSelectedTitle();});
 window.addEventListener('focus',load);
+if(location.pathname==='/diagnostics.html')el('connectionDiagnostics').open=true;
 load();
 })();
 </script></body></html>

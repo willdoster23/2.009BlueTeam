@@ -45,6 +45,9 @@ def probe():
 
 
 class Handler(BaseHTTPRequestHandler):
+    controls = network
+    preview = False
+
     def log_message(self, *_):
         pass
 
@@ -110,22 +113,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.allowed_host():
             return self.respond(403, {'error': 'Use the inspection LAN address'})
-        if self.path.split('?')[0] == '/diagnostics.html':
-            html = (ROOT / 'index.html').read_text().replace('__PHOTO_TOKEN__', TOKEN)
+        if self.path.split('?')[0] in ('/', '/index.html', '/map.html', '/diagnostics.html'):
+            html = (ROOT / 'map.html').read_text().replace('__PREVIEW__', str(self.preview).lower())
             return self.respond(200, html.encode(), 'text/html; charset=utf-8')
-        if self.path.split('?')[0] in ('/', '/index.html', '/map.html'):
-            html = (ROOT / 'map.html').read_text().replace('__PHOTO_TOKEN__', TOKEN)
-            return self.respond(200, html.encode(), 'text/html; charset=utf-8')
-        if self.path in ('/player.js', '/dashboard.js', '/storage.js'):
+        if self.path in ('/player.js', '/dashboard.js', '/storage.js', '/automatic.js', '/pages.js', '/tap-score.js', '/tap-analysis.js'):
             script = (ROOT / self.path[1:]).read_text().replace('__PHOTO_TOKEN__', TOKEN)
             return self.respond(200, script.encode(), 'text/javascript; charset=utf-8')
         if self.path == '/api/app':
-            return self.respond(200, {'app': 'blue-team-brick-map', 'hostedOn': 'roof'})
+            return self.respond(200, {'app': 'blue-team-brick-map', 'hostedOn': 'preview' if self.preview else 'roof'})
         if self.path == '/api/health':
             with lock:
                 return self.respond(200, dict(health))
         if self.path == '/api/network':
-            return self.respond(200, network.status())
+            return self.respond(200, self.controls.status())
         self.respond(404, {'error': 'Not found'})
 
     def do_POST(self):
@@ -134,7 +134,12 @@ class Handler(BaseHTTPRequestHandler):
         media = MEDIA_ROUTE.fullmatch(self.path)
         if media:
             return self.media(media)
-        if self.path in ('/api/winch', '/api/tap'):
+        if self.path == '/api/poweroff':
+            return self.respond(*self.controls.poweroff())
+        commands = {'/api/winch': self.controls.command, '/api/tap': self.controls.tap,
+                    '/api/camera': self.controls.camera}
+        axis_paths = ('/api/x-axis', '/api/y-axis')
+        if self.path in commands or self.path in axis_paths:
             try:
                 length = int(self.headers.get('Content-Length', '0'))
                 if self.headers.get('Transfer-Encoding') or not 0 < length <= 1024:
@@ -143,8 +148,9 @@ class Handler(BaseHTTPRequestHandler):
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
                     raise ValueError('Expected an object')
-                command = network.command if self.path == '/api/winch' else network.tap
-                return self.respond(*command(payload))
+                if self.path in axis_paths:
+                    return self.respond(*self.controls.axis(self.path, payload))
+                return self.respond(*commands[self.path](payload))
             except (OSError, ValueError):
                 return self.respond(400, {'error': 'Invalid control request'})
         self.respond(404, {'error': 'Not found'})

@@ -10,7 +10,19 @@ test -s /opt/blueteam-network/network.key
 test -x /usr/sbin/dnsmasq
 ip -o -4 address show dev eth0 | grep -q '192\.168\.2\.4/24 '
 
-install -d -m 755 /opt/brick-mapper/app /etc/brick-mapper
+install -d -m 755 /opt/brick-mapper/app /etc/brick-mapper/dhcp.d
+install -m 644 "$BLUE_SOURCE"/pi/{agent.py,winch.py,x_axis.py,outrigger.py} /opt/blueteam-network/
+if ! test -e /etc/brick-mapper/x-axis.json; then
+    install -m 644 "$BLUE_SOURCE/pi/x-axis.json" /etc/brick-mapper/x-axis.json
+fi
+install -d -m 755 /etc/systemd/system/blueteam-network.service.d
+cat > /etc/systemd/system/blueteam-network.service.d/outrigger.conf <<'EOF'
+[Service]
+SupplementaryGroups=dialout
+StateDirectory=brick-mapper-outrigger
+StateDirectoryMode=0750
+EOF
+touch /etc/brick-mapper/outrigger
 install -m 644 "$BLUE_SOURCE"/app/*.py "$BLUE_SOURCE"/app/*.js "$BLUE_SOURCE"/app/*.html /opt/brick-mapper/app/
 
 cat > /etc/systemd/system/brick-mapper.socket <<'EOF'
@@ -55,6 +67,7 @@ dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,12h
 dhcp-option=option:router
 dhcp-option=option:dns-server
 dhcp-leasefile=/var/lib/misc/brick-mapper.leases
+conf-dir=/etc/brick-mapper/dhcp.d,*.conf
 EOF
 /usr/sbin/dnsmasq --test --conf-file=/etc/brick-mapper/dnsmasq.conf
 
@@ -86,6 +99,7 @@ systemctl enable avahi-daemon.service
 systemctl restart avahi-daemon.service
 systemctl daemon-reload
 systemctl enable --now brick-mapper.socket brick-mapper-dhcp.service
+systemctl restart blueteam-network.service
 if systemctl is-active --quiet brick-mapper.service; then
     systemctl restart brick-mapper.service
 fi
