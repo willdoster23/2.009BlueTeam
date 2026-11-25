@@ -5,16 +5,67 @@
   const storage = window.brickStorage;
   const scoring = window.brickTapAnalysis;
   const isPreview = document.body.dataset.preview === 'true';
-  const routeInputs = ['routeCoverage', 'routeRows', 'routeColumns', 'routeXSpacing', 'routeYSpacing', 'routeYLimit'];
+  const Y_TARGET_TOLERANCE = 0.5;
+  const POSITION_EPSILON = 1e-8;
+  const routeInputs = ['routeDirection', 'routeCoverage', 'routeRows', 'routeColumns', 'routeXSpacing', 'routeYSpacing', 'routeYLimit'];
   let controller = null, lastSaved = null, reviewed = null, saving = null, editing = false;
   let tapRequestId = null, sampleY = 0;
+  let savedRoute = null, routeSaving = false, routeNotice = '';
+  let routeTouched = false;
+  let routeRunning = false, pauseRequested = false, routePaused = false, resumeRouteWait = null;
+  let routeFailed = false;
   const pending = [];
-  const reviewButtons = [['reviewSimilar', 'good'], ['reviewDifferent', 'review'],
+  const reviewButtons = [['reviewSimilar', 'good'], ['reviewDifferent', 'bad'],
     ['reviewVisual', 'visual'], ['reviewUnknown', 'unknown'], ['reviewSaveNotes', null]];
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   function check(signal) {
     signal.throwIfAborted();
+  }
+
+  function routeControls() {
+    window.brickRoutePreview?.setRunning(routeRunning);
+    el('routePause').hidden = !routeRunning || routePaused;
+    el('routePause').disabled = pauseRequested;
+    el('routePause').textContent = pauseRequested ? 'Pausing after this stop…' : 'Pause Route';
+    el('routeResume').hidden = !routePaused;
+    el('routeStop').hidden = !routeRunning;
+  }
+
+  async function waitForRouteResume(signal, completed, total) {
+    check(signal);
+    if (!pauseRequested) return;
+    routePaused = true;
+    routeControls();
+    const message = `Paused · ${completed} of ${total} stops complete. Inspect the saved data, then Resume Route when ready.`;
+    el('routeProgress').textContent = el('inspectionStatus').textContent = message;
+    await new Promise((resolve, reject) => {
+      const finish = error => {
+        signal.removeEventListener('abort', abort);
+        resumeRouteWait = null;
+        if (error) reject(error); else resolve();
+      };
+      const abort = () => finish(signal.reason || new DOMException('Route stopped.', 'AbortError'));
+      resumeRouteWait = () => finish();
+      signal.addEventListener('abort', abort, {once: true});
+      if (signal.aborted) abort();
+    });
+    check(signal);
+  }
+
+  function pauseRoute() {
+    if (!routeRunning || pauseRequested) return;
+    pauseRequested = true;
+    routeControls();
+    el('routeProgress').textContent = 'Pause requested. The current stop will finish and save before the route pauses. Stop Route interrupts immediately.';
+  }
+
+  function resumeRoute() {
+    if (!routePaused) return;
+    pauseRequested = routePaused = false;
+    routeControls();
+    el('routeProgress').textContent = 'Resuming the saved route…';
+    resumeRouteWait?.();
   }
 
   function yZero(roof) {
@@ -23,11 +74,34 @@
       ? axis.rawCounts - axis.counts * axis.direction : null;
   }
 
-  function measuredBrick(position, reference) {
+  function referenceMatches(reference, roof) {
+    return reference?.bootId === roof.bootId && reference.yZero === yZero(roof)
+      && (reference.xEpoch ?? roof.xAxis?.coordinateEpoch) === roof.xAxis?.coordinateEpoch;
+  }
+
+  async function wallReference(roof) {
+    let reference = await storage.reference();
+    const epoch = roof.xAxis?.coordinateEpoch;
+    if (reference?.bootId === roof.bootId && (reference.xEpoch ?? epoch) === epoch) {
+      const zero = roof.xAxis?.zeroInches ?? 0;
+      if ((reference.xZero ?? 0) !== zero || reference.xEpoch !== epoch) {
+        // Re-label coordinates after X zero without changing brick addresses
+        // or allowing another tap at a location already recorded.
+        reference = {...reference, x: reference.x + (reference.xZero ?? 0) - zero,
+          xZero: zero, ...(epoch ? {xEpoch: epoch} : {})};
+        await storage.saveReference(reference);
+      }
+    }
+    return reference;
+  }
+
+  function measuredBrick(position, reference, plannedY = position.yInches) {
     const x = (position.xInches - reference.x) / reference.xStep;
-    const y = (position.yInches - reference.y) / reference.yStep;
+    const y = (plannedY - reference.y) / reference.yStep;
     const column = Math.round(x), course = Math.round(y);
-    if (Math.abs(x - column) > .37 || Math.abs(y - course) > .29) {
+    const yError = Math.max(Math.abs(plannedY - (reference.y + course * reference.yStep)),
+      Math.abs(position.yInches - plannedY));
+    if (Math.abs(x - column) > .37 || yError > Y_TARGET_TOLERANCE + POSITION_EPSILON) {
       throw new Error('Position is between mapped bricks. Check the tapper and the wall reference before tapping.');
     }
     return {source: 'measured', course: course + 1, column: column + 1};
@@ -35,6 +109,8 @@
 
   function routeSettings(originY, live, validate = false) {
     const toLimit = el('routeCoverage').value === 'limit';
+    const xDirection = el('routeDirection').value;
+    if (!['left', 'right'].includes(xDirection)) return {error: 'Choose the starting side and travel direction.'};
     const columns = el('routeColumns').valueAsNumber;
     el('routeRowsField').hidden = toLimit;
     el('routeYLimit').required = live || toLimit;
@@ -50,28 +126,113 @@
     const requested = el('routeRows').valueAsNumber;
     const rows = toLimit ? fits : Math.min(requested, fits);
     if (!Number.isSafeInteger(rows * columns)) return {error: 'Check the route dimensions and spacing.'};
-    return {rows, columns, xStep: columns > 1 ? el('routeXSpacing').valueAsNumber : 0, yStep, limit,
+    return {rows, columns, xDirection, xStep: columns > 1 ? el('routeXSpacing').valueAsNumber : 0, yStep, limit,
       shortened: !toLimit && rows < requested};
   }
 
   function routeSummary() {
     if (controller) return;
     const hardware = el('inspectionMode').value === 'hardware';
-    el('routeRun').textContent = hardware ? 'Run route on rig' : 'Simulate route';
+    el('routeRun').textContent = hardware ? 'Run Route' : 'Simulate Route';
     const originY = Math.max(0, ui.state()?.roof.data?.position?.yInches ?? 0);
-    const {error, rows, columns, xStep, yStep, shortened} = routeSettings(originY, hardware && !isPreview);
-    const summary = error ?? `${rows * columns} stops · ${rows} per column · Y ${(originY + yStep * (rows - 1)).toFixed(2)} in at the last course · ${(xStep * (columns - 1)).toFixed(2)} in right.`
+    const plan = routeSettings(originY, hardware && !isPreview);
+    const {error, rows, columns, xDirection, xStep, yStep, shortened} = plan;
+    window.brickRoutePreview?.render(error ? null : {
+      ...plan, originY, corners: [...routeStops(plan, true)]
+    }, error);
+    const summary = error ?? `${xDirection === 'left' ? 'Start right → move left' : 'Start left → move right'} · ${rows * columns} stops · ${rows} per column · Y ${(originY + yStep * (rows - 1)).toFixed(2)} in at the last course · ${columns > 1 ? `${(xStep * (columns - 1)).toFixed(2)} in ${xDirection}` : 'no horizontal travel'}.`
       + (shortened ? ' Course count reduced to fit lowest Y.' : '');
     if (el('routeSummary').textContent !== summary) el('routeSummary').textContent = summary;
     el('setupRouteSummary').textContent = summary;
+    const dirty = savedRoute && !routeMatches();
+    const tapState = ui.state()?.robot.data?.tap;
+    const controlsBusy = (hardware || isPreview) && (ui.movementBusy() || ui.tapping()
+      || (tapState?.available && tapState.mode !== 'idle'));
+    el('routeRun').disabled = routeSaving || routeFailed || !savedRoute || dirty || !!error || controlsBusy;
+    el('routeSave').disabled = routeSaving;
+    el('routeSave').classList.toggle('primary', routeFailed || !savedRoute || dirty);
+    el('routeSave').textContent = routeSaving ? 'Saving Route…' : 'Save Route';
+    el('routeSaveStatus').textContent = routeSaving ? 'Saving your route…'
+      : dirty ? 'Unsaved changes. Save Route before running.'
+      : savedRoute && controlsBusy ? 'Route saved. Waiting for the current movement or recording to finish.'
+      : routeNotice || (savedRoute ? 'Route saved on this computer. Run Route will complete all stops automatically.'
+        : 'Save your route to enable Run Route.');
+    routeControls();
   }
 
-  function* routeStops({rows, columns}) {
+  function routeDraft() {
+    return {version: 1, inputs: Object.fromEntries(routeInputs.map(id => [id, el(id).value])),
+      zone: el('brickTapZone').value, hardware: el('inspectionMode').value === 'hardware'};
+  }
+
+  function routeMatches() {
+    return savedRoute && JSON.stringify(routeDraft()) === JSON.stringify(savedRoute);
+  }
+
+  async function restoreRoute() {
+    try {
+      const value = await storage.route();
+      if (!value || routeTouched || routeSaving || controller) return;
+      if (!storage.validRoute(value)) throw new Error('Saved route could not be read. Enter the route and save it again.');
+      for (const id of routeInputs) el(id).value = value.inputs[id] ?? (id === 'routeDirection' ? 'right' : '');
+      el('brickTapZone').value = value.zone;
+      ui.setInspectionMode(value.hardware ? 'hardware' : 'simulation');
+      savedRoute = routeDraft();
+      el('routePlanner').open = false;
+    } catch (error) {
+      routeNotice = error.message;
+    } finally {
+      routeSummary();
+    }
+  }
+
+  async function saveRoute() {
+    if (controller || routeSaving) return;
+    const live = !isPreview && el('inspectionMode').value === 'hardware';
+    const roof = ui.state()?.roof.data;
+    const originY = Math.max(0, roof?.position?.yInches ?? 0);
+    const plan = routeSettings(originY, live, true);
+    if (plan.error) {
+      el('routePlanner').open = true;
+      routeNotice = plan.error;
+      routeSummary();
+      return;
+    }
+    const draft = routeDraft();
+    routeSaving = true;
+    routeNotice = '';
+    routeSummary();
+    const fields = [...routeInputs, 'brickTapZone', 'inspectionMode', 'routeUseSample'];
+    for (const id of fields) el(id).disabled = true;
+    try {
+      if (live) {
+        const reference = await wallReference(roof);
+        if (!referenceMatches(reference, roof)) {
+          await saveFirstBrick({preserveSpacing: !!reference});
+        }
+      }
+      await storage.saveRoute(draft);
+      savedRoute = draft;
+      routeFailed = false;
+      el('routePlanner').open = false;
+      routeNotice = 'Route saved on this computer. Run Route will complete all stops automatically.';
+      el('routeProgress').textContent = 'Ready to run the saved route.';
+    } catch (error) {
+      routeNotice = 'Route was not saved. ' + error.message;
+    } finally {
+      routeSaving = false;
+      for (const id of fields) el(id).disabled = false;
+      routeSummary();
+    }
+  }
+
+  function* routeStops({rows, columns, xDirection = 'right'}, cornersOnly = false) {
+    const stride = cornersOnly ? Math.max(1, rows - 1) : 1;
     for (let column = 0; column < columns; column++) {
-      for (let index = 0; index < rows; index++) {
+      for (let index = 0; index < rows; index += stride) {
         const row = column % 2 === 0 ? index : rows - index - 1;
         const axis = index > 0 ? 'y' : column > 0 ? 'x' : null;
-        const direction = axis === 'x' || column % 2 === 0 ? 1 : -1;
+        const direction = axis === 'x' ? (xDirection === 'left' ? -1 : 1) : column % 2 === 0 ? 1 : -1;
         yield {row, column, axis, direction};
       }
     }
@@ -83,7 +244,7 @@
   }
 
   async function visit(step, plan, origin, controlled, signal) {
-    const targetX = origin.xInches + step.column * plan.xStep;
+    const targetX = origin.xInches + step.column * plan.xStep * (plan.xDirection === 'left' ? -1 : 1);
     const targetY = origin.yInches + step.row * plan.yStep;
     if (!controlled) {
       await pause(180);
@@ -93,6 +254,9 @@
     const roof = ui.state()?.roof.data;
     let position = roof?.position;
     if (!position || roof.bootId !== origin.bootId) throw new Error('The rooftop controller changed during the route.');
+    if (roof.xAxis?.coordinateEpoch !== origin.xEpoch || (roof.xAxis?.zeroInches ?? 0) !== (origin.xZero ?? 0)) {
+      throw new Error('The X reference changed during the route. Save the route again before restarting.');
+    }
     if (!['xInches', 'yInches'].every(key => Number.isFinite(position[key]))) {
       throw new Error('The encoders did not report a position for this stop.');
     }
@@ -100,22 +264,33 @@
     if (!step.axis) return position;
     const target = step.axis === 'x' ? targetX : targetY;
     const key = step.axis + 'Inches';
+    const tolerance = step.axis === 'y' ? Y_TARGET_TOLERANCE : 0.1;
     const remaining = () => (target - position[key]) * step.direction;
-    if (remaining() < -0.1) return null;
+    if (remaining() < -tolerance - POSITION_EPSILON) return null;
     const max = roof[step.axis + 'Axis'].maxJogInches ?? (step.axis === 'x' ? 6 : 12);
-    const jogs = Math.ceil(remaining() / max);
+    // Each bounded jog may stop up to half an inch short. Use measured
+    // remaining travel, including that tolerance, when budgeting long routes.
+    const jogs = Math.ceil(Math.max(0, remaining()) / Math.max(0.1, max - tolerance)) + 1;
     const notes = new Set();
-    for (let jog = 0; jog < jogs && remaining() >= 0.1; jog++) {
+    for (let jog = 0; jog < jogs && remaining() > tolerance + POSITION_EPSILON; jog++) {
       check(signal);
       const inches = Math.min(remaining(), max);
+      const before = position[key];
       position = await (step.axis === 'x'
-        ? ui.moveX('right', inches, {signal})
+        ? ui.moveX(step.direction > 0 ? 'right' : 'left', inches, {signal})
         : ui.moveY(step.direction > 0 ? 'down' : 'up', inches, {signal, routeLimitInches: plan.limit}));
       if (!Number.isFinite(position?.[key])) throw new Error('The encoders did not report a position after moving.');
       if (plan.limit !== null && position.yInches > plan.limit) throw new Error('Route stopped at the lower Y limit.');
       if (position.yMoveNote) notes.add(position.yMoveNote);
+      if (step.axis === 'y' && remaining() > tolerance + POSITION_EPSILON
+          && (position[key] - before) * step.direction < POSITION_EPSILON) {
+        throw new Error('Y stopped without reaching the half-inch target window. Check the position, then save a new route.');
+      }
     }
-    if (Math.abs(remaining()) > 0.1) {
+    if (step.axis === 'y' && Math.abs(remaining()) > tolerance + POSITION_EPSILON) {
+      throw new Error(`Y stopped ${Math.abs(remaining()).toFixed(2)} in from the planned stop, outside the half-inch target window.`);
+    }
+    if (Math.abs(remaining()) > tolerance + POSITION_EPSILON) {
       notes.add(`Measured ${step.axis.toUpperCase()} is ${Math.abs(remaining()).toFixed(2)} in from the planned stop.`);
     }
     return notes.size ? {...position, yMoveNote: [...notes].join(' ')} : position;
@@ -178,6 +353,10 @@
     const roof = state?.roof.data;
     const robot = state?.robot.reachable ? state.robot.data : null;
     const status = el(stationary ? 'stationaryStatus' : 'inspectionStatus');
+    if (isRoute && !stationary && (routeFailed || !routeMatches() || routeSaving)) {
+      status.textContent = 'Save Route before running the automatic inspection.';
+      return;
+    }
     if (ui.movementBusy() || ui.tapping()) {
       status.textContent = 'Wait for the current operation to finish.';
       return;
@@ -195,7 +374,8 @@
       status.textContent = 'Connect the encoders and set Y zero.';
       return;
     }
-    const origin = {bootId: roof.bootId, xInches: roof.position.xInches ?? 0,
+    const origin = {bootId: roof.bootId, xEpoch: roof.xAxis?.coordinateEpoch, xZero: roof.xAxis?.zeroInches ?? 0,
+      xInches: roof.position.xInches ?? 0,
       yInches: Math.max(0, roof.position.yInches ?? 0)};
     const plan = isRoute && !stationary ? routeSettings(origin.yInches, live, true) : null;
     if (plan?.error) {
@@ -224,20 +404,24 @@
     }
 
     controller = new AbortController();
+    routeRunning = isRoute && !stationary;
+    pauseRequested = routePaused = false;
+    routeControls();
     const {signal} = controller;
-    const inputs = ['inspectionRun', 'inspectionMode', 'inspectionTaps', 'routeRun', 'routeUseSample',
+    const inputs = ['inspectionRun', 'inspectionMode', 'inspectionTaps', 'routeRun', 'routeSave', 'routeUseSample',
       'brickTapHere', 'brickTapZone', 'routeReference', 'previewSlip',
       'routeSampleSpan', 'routeSampleIntervals', ...routeInputs];
     for (const id of inputs) el(id).disabled = true;
     el('inspectionCancel').hidden = false;
+    el('inspectionCancel').textContent = routeRunning ? 'Stop Route' : 'Cancel test';
     ui.busy(true);
     try {
       const options = {live, burst, signal, status};
       if (stationary) {
         const position = roof.position;
-        const reference = live ? await storage.reference() : null;
+        const reference = live ? await wallReference(roof) : null;
         let brick = isPreview ? window.brickCamera.previewIdentity(position) : null;
-        if (reference?.bootId === roof.bootId && reference.yZero === yZero(roof)) {
+        if (referenceMatches(reference, roof)) {
           const x = (position.xInches - reference.x) / reference.xStep;
           const y = (position.yInches - reference.y) / reference.yStep;
           if (Math.abs(x - Math.round(x)) <= .37 && Math.abs(y - Math.round(y)) <= .29) {
@@ -250,14 +434,9 @@
           : pending.length ? 'Recording complete. Use Retry saving to save the photo and audio.'
           : 'Photo and three-tap recording saved at the current position. Open the brick map or Audio recordings.';
       } else if (plan) {
-        const reference = live ? await storage.reference() : null;
-        if (live && (!reference || reference.bootId !== roof.bootId || reference.yZero !== yZero(roof))) {
+        const reference = live ? await wallReference(roof) : null;
+        if (live && !referenceMatches(reference, roof)) {
           status.textContent = 'Align with the first brick and set the wall reference before running mapped taps.';
-          return;
-        }
-        if (live && !stationary && (Math.abs(plan.yStep - reference.yStep) > .001
-            || (plan.columns > 1 && Math.abs(plan.xStep - reference.xStep) > .001))) {
-          status.textContent = 'Use the spacing saved with this wall reference.';
           return;
         }
         const zone = el('brickTapZone').value;
@@ -266,20 +445,25 @@
         let duplicates = 0;
         let warnings = 0;
         let unscored = 0;
+        let visited = 0;
+        const total = plan.rows * plan.columns;
         for (const step of routeStops(plan)) {
+          await waitForRouteResume(signal, visited, total);
           check(signal);
-          const label = `Column ${step.column + 1}, brick ${step.row + 1}`;
-          status.textContent = label + ' · moving';
+          const label = `Stop ${++visited} of ${total} · column ${step.column + 1}, brick ${step.row + 1}`;
+          const movement = step.axis === 'x' ? `moving ${plan.xDirection}`
+            : step.axis === 'y' ? `moving ${step.direction > 0 ? 'down' : 'up'}` : 'at starting brick';
+          el('routeProgress').textContent = status.textContent = label + ' · ' + movement;
           const position = await visit(step, plan, origin, controlled, signal);
           if (!position) {
             skipped++;
             continue;
           }
           if (position.yMoveNote) warnings++;
-          const target = {xInches: origin.xInches + plan.xStep * step.column,
+          const target = {xInches: origin.xInches + plan.xStep * step.column * (plan.xDirection === 'left' ? -1 : 1),
             yInches: origin.yInches + plan.yStep * step.row};
           const brick = isPreview ? window.brickCamera.previewIdentity(target) : reference ? measuredBrick(target, reference) : null;
-          if (reference && storage.brickKey(measuredBrick(position, reference)) !== storage.brickKey(brick)) {
+          if (reference && storage.brickKey(measuredBrick(position, reference, target.yInches)) !== storage.brickKey(brick)) {
             throw new Error('Route paused before tapping: the measured position differs from the planned brick.');
           }
           const captured = await captureStop(position, {...options, label, brick, zone});
@@ -287,7 +471,7 @@
             duplicates++;
             continue;
           }
-          if (pending.length) throw new Error('Route paused because a capture could not be saved. Use Retry saving.');
+          if (pending.length) throw new Error('Route stopped because a capture could not be saved. Use Retry saving.');
           saved++;
           if (controlled && !lastSaved.record.tap_analysis) unscored++;
         }
@@ -299,6 +483,7 @@
           controlled && saved > unscored && !scoring.baseline() ? 'Record a baseline to show scores' : ''
         ].filter(Boolean);
         status.textContent = `Route complete · ${saved} captures saved` + (notes.length ? ' · ' + notes.join(' · ') : '.');
+        el('routeProgress').textContent = status.textContent;
       } else {
         const inches = el('yDistance').valueAsNumber;
         status.textContent = live ? `Lowering ${inches} in…` : `Simulating a ${inches} in descent…`;
@@ -318,9 +503,18 @@
       }
     } catch (error) {
       status.textContent = signal.aborted ? 'Inspection canceled.' : error.message;
+      if (isRoute && !stationary) el('routeProgress').textContent = status.textContent;
+      if (isRoute && !stationary && !signal.aborted) {
+        routeFailed = true;
+        el('routePlanner').open = true;
+        routeNotice = 'Route stopped. Adjust the settings and Save Route, then Run Route to start again. Saved recordings are kept.';
+      }
       if (controlled && !stationary) await stopMotion();
     } finally {
       controller = null;
+      routeRunning = pauseRequested = routePaused = false;
+      resumeRouteWait = null;
+      routeControls();
       tapRequestId = null;
       el('inspectionCancel').hidden = true;
       ui.busy(false);
@@ -357,7 +551,7 @@
   function updateReview() {
     const {record} = reviewed;
     for (const [button, status] of reviewButtons) {
-      if (status) el(button).setAttribute('aria-pressed', String(record.status === status));
+      if (status) el(button).setAttribute('aria-pressed', String(record.status === status || (status === 'bad' && record.status === 'review')));
     }
     el('reviewStatus').textContent = '';
   }
@@ -415,7 +609,7 @@
           ? (result === 'unknown' ? 'pending' : 'tap-review')
           : record.classification_source,
         notes: el('reviewNotes').value.trim(),
-        flagged: el('reviewFlag').checked || result === 'review'
+        flagged: el('reviewFlag').checked || result === 'bad'
       });
       el('reviewFlag').checked = reviewed.record.flagged;
       updateReview();
@@ -456,30 +650,38 @@
 
   el('inspectionRun').onclick = () => run();
   el('routeRun').onclick = () => run(true);
+  el('routeSave').onclick = saveRoute;
+  el('routePause').onclick = pauseRoute;
+  el('routeResume').onclick = resumeRoute;
+  el('routeStop').onclick = cancel;
   el('brickTapHere').onclick = () => run(true, true);
-  el('routeReference').onclick = async () => {
+  async function saveFirstBrick({preserveSpacing = false} = {}) {
     const roof = ui.state()?.roof.data;
     const feedback = el('brickReferenceStatus');
     if (!roof || !ui.positionMeasured() || !roof.position.yZeroed || ui.movementBusy() || controller || yZero(roof) === null) {
-      feedback.textContent = 'Set roof zero and stop at the first brick before saving the reference.';
-      return;
+      throw new Error('Set Y zero and stop at the first brick before saving the route.');
     }
     const x = el('routeXSpacing'), y = el('routeYSpacing');
     x.required = true;
-    if (!x.reportValidity() || !y.reportValidity()) return;
+    if (!x.reportValidity() || !y.reportValidity()) throw new Error('Enter horizontal and vertical brick spacing.');
+    const previous = await wallReference(roof);
+    if (previous && !preserveSpacing && (Math.abs(previous.xStep - x.valueAsNumber) > .001 || Math.abs(previous.yStep - y.valueAsNumber) > .001)) {
+      throw new Error('Use the original brick spacing when aligning to this job’s first brick.');
+    }
+    await storage.saveReference({x: roof.position.xInches, y: roof.position.yInches,
+      xStep: preserveSpacing ? previous.xStep : x.valueAsNumber,
+      yStep: preserveSpacing ? previous.yStep : y.valueAsNumber,
+      bootId: roof.bootId, yZero: yZero(roof), xZero: roof.xAxis?.zeroInches ?? 0,
+      ...(roof.xAxis?.coordinateEpoch ? {xEpoch: roof.xAxis.coordinateEpoch} : {}), wallId: previous?.wallId ?? storage.id()});
+    feedback.textContent = roof.yAxis?.estimated
+      ? 'First brick saved with estimated Y. Confirm brick alignment in the camera before each tap.'
+      : 'First brick saved. Return to this same brick if the roof reference changes.';
+  }
+  el('routeReference').onclick = async () => {
     try {
-      const previous = await storage.reference();
-      if (previous && (Math.abs(previous.xStep - x.valueAsNumber) > .001 || Math.abs(previous.yStep - y.valueAsNumber) > .001)) {
-        feedback.textContent = 'Use the original brick spacing when aligning to this job’s first brick.';
-        return;
-      }
-      await storage.saveReference({x: roof.position.xInches, y: roof.position.yInches, xStep: x.valueAsNumber,
-        yStep: y.valueAsNumber, bootId: roof.bootId, yZero: yZero(roof), wallId: previous?.wallId ?? storage.id()});
-      feedback.textContent = roof.yAxis?.estimated
-        ? 'First brick saved with estimated Y. Confirm brick alignment in the camera before each tap.'
-        : 'First brick saved. Return to this same brick if the roof reference changes.';
+      await saveFirstBrick();
     } catch (error) {
-      feedback.textContent = error.message;
+      el('brickReferenceStatus').textContent = error.message;
     }
   };
   if (isPreview) {
@@ -490,8 +692,13 @@
   } else {
     el('brickReferenceStatus').textContent = 'Align the tapper with your first brick, then set the wall reference. Position the tapper before choosing Center or Edge.';
   }
-  for (const id of routeInputs) el(id).addEventListener('input', routeSummary);
+  for (const id of [...routeInputs, 'brickTapZone', 'inspectionMode']) el(id).addEventListener('input', () => {
+    routeTouched = true;
+    routeNotice = '';
+    routeSummary();
+  });
   el('routeUseSample').onclick = () => {
+    routeTouched = true;
     const span = el('routeSampleSpan');
     const intervals = el('routeSampleIntervals');
     if (!span.reportValidity() || !intervals.reportValidity()) return;
@@ -510,12 +717,11 @@
     routeSummary();
     el('hardwareDistanceNotice').hidden = el('inspectionMode').value !== 'hardware';
     el('inspectionStatus').textContent = el('inspectionMode').value === 'hardware'
-      ? (ui.state()?.roof.data?.relays.autoArm
-        ? 'Hardware mode · each step sends Start before lowering.'
-        : 'Hardware mode · arm the winch before running a step.')
-      : 'Ready to simulate the next step.';
+      ? 'Hardware mode · Save Route, then Run Route to inspect all stops automatically.'
+      : 'Simulation mode · Save Route, then Simulate Route.';
   };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); });
+  restoreRoute();
+  document.addEventListener('visibilitychange', () => { if (document.hidden && !routePaused) cancel(); });
   window.addEventListener('pagehide', cancel);
   window.addEventListener('inspectionstop', () => {
     if (!controller) return;

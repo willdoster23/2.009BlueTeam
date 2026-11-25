@@ -13,6 +13,7 @@
   let xMessage = '', yMessage = '';
   let tuningDirty = false, tuningSaving = false, tuningSaved = '';
   let poweroffBusy = false, poweroffScheduled = false, poweroffMessage = '';
+  let ledBusy = false, ledEditing = false, ledError = '', ledLastOn = 100;
   const scheduledMessage = 'Both shutdowns are scheduled. Wait for both Pis to finish shutting down before unplugging.';
   const positionReady = () => !!latest?.roof.reachable && performance.now() - receivedAt < 1800;
   const xBusy = () => !!distanceControllers.x || !!xRequestId || !!(positionReady() && latest.roof.data.xAxis?.moving);
@@ -21,6 +22,7 @@
     positionMeasured: () => positionReady() && ['x', 'y', 'xInches', 'yInches']
       .every(key => Number.isFinite(latest.roof.data.position?.[key])),
     state: () => positionReady() ? latest : null,
+    refresh: () => { paint(); window.dispatchEvent(new Event('inspectionposition')); },
     movementBusy: () => xBusy() || !!distanceControllers.y || ySending || !!(positionReady() &&
       (latest.roof.data.yAxis?.moving || latest.roof.data.relays?.busy ||
         ['up', 'down'].includes(latest.roof.data.relays?.action))),
@@ -30,7 +32,15 @@
     stopX,
     moveY,
     stopY,
+    sendAxis,
+    motorTurns,
     inspectionActive: () => inspectionBusy,
+    setInspectionMode(mode) {
+      if (!['hardware', 'simulation'].includes(mode)) throw new Error('Choose a valid inspection mode.');
+      initialModeSet = true;
+      el('inspectionMode').value = mode;
+      el('inspectionMode').dispatchEvent(new Event('change'));
+    },
     busy(value) { inspectionBusy = value; paint(); window.dispatchEvent(new Event('inspectionposition')); },
     winch: command,
     tap: tapRequest,
@@ -49,6 +59,17 @@
     const linked = !!roof?.exchange.connected;
     const robotStopping = !!roof?.poweroff?.robotScheduled || !!robot?.poweroff?.scheduled;
     const stopping = poweroffBusy || poweroffScheduled || !!roof?.poweroff?.scheduled || robotStopping;
+    const led = robot?.led;
+    el('ledToggle').disabled = el('ledBrightness').disabled = stopping || ledBusy || !led?.available;
+    el('ledToggle').textContent = led?.brightness > 0 ? 'Turn light off' : 'Turn light on';
+    el('ledToggle').setAttribute('aria-pressed', String(led?.brightness > 0));
+    if (!ledBusy && !ledEditing) {
+      el('ledBrightness').value = led?.brightness || 0;
+      el('ledBrightnessValue').textContent = (led?.brightness || 0) + '%';
+    }
+    el('ledStatus').textContent = ledError || (ledBusy ? 'Setting brightness…'
+      : led?.available ? (led.brightness ? 'Light on · ' + led.brightness + '%' : 'Light off')
+      : led?.error || 'Robot light unavailable');
     el('poweroff').disabled = poweroffBusy || poweroffScheduled || !roof?.poweroff?.available ||
       !!roof.poweroff.scheduled || (!roof.poweroff.robotScheduled && !robot?.poweroff?.available);
     el('poweroffStatus').textContent = poweroffMessage || (roof?.poweroff?.scheduled ? scheduledMessage
@@ -75,13 +96,13 @@
     }
     el('encoderX').value = roof?.position.xInches?.toFixed(2) ?? '';
     el('encoderY').value = roof?.position.yInches?.toFixed(2) ?? '';
-    el('xReadout').value = el('encoderX').value ? el('encoderX').value + ' in' : '—';
+    el('xReadout').value = el('encoderX').value ? el('encoderX').value + (roof?.position.xEstimated ? ' in · estimated' : ' in') : '—';
     el('yReadout').value = el('encoderY').value ? el('encoderY').value + (roof?.yAxis?.estimated ? ' in · estimated' : ' in') : '—';
     const pulleyCount = roof?.yAxis?.rawCounts;
     const yCount = roof?.position.y;
     const yCountText = yCount == null && pulleyCount != null ? `${pulleyCount} raw` : yCount ?? '—';
     el('positionStatus').textContent = roof
-      ? (roof.yAxis?.estimated ? `X ${roof.position.x ?? '—'} counts · Y estimated from winch time` : `X ${roof.position.x ?? '—'} counts · Y ${yCountText} counts`)
+      ? (roof.yAxis?.estimated ? `X ${roof.position.x ?? '—'} ${roof.position.xEstimated ? 'commanded pulses' : 'counts'} · Y estimated from winch time` : `X ${roof.position.x ?? '—'} ${roof.position.xEstimated ? 'commanded pulses' : 'counts'} · Y ${yCountText} counts`)
       : 'Waiting for position from the controller.';
     const relays = roof?.relays;
     const upOnly = relays?.mode === 'live-up';
@@ -94,12 +115,15 @@
     const horizontal = roof?.xAxis;
     const vertical = roof?.yAxis;
     const measuredY = vertical?.mode === 'live';
+    el('winchTuningTools').hidden = vertical?.drive === 'stepper';
+    el('legacyWinchControls').hidden = vertical?.drive === 'stepper';
     const movingY = !!distanceControllers.y || !!vertical?.moving || ySending;
     const winchBusy = relays?.busy ?? !!relays?.action;
     const canArm = relays?.autoArm || relays?.enabled;
     const available = !inspectionBusy && !stopping && !sending && !winchBusy;
-    const canMove = available && !xBusy() && !movingY;
+    const canMove = available && !xBusy() && !movingY && !window.blueStepperControls?.busy();
     el('moveLeft').disabled = el('moveRight').disabled = !canMove || !horizontal?.ready;
+    el('zeroX').disabled = !canMove || !(horizontal?.drive === 'stepper' ? horizontal.motorConnected : horizontal?.ready);
     el('stopX').disabled = !(xBusy() || horizontal?.moving);
     el('moveYUp').disabled = !canMove || !vertical ||
       (measuredY && !(canArm && (vertical.upReady ?? vertical.ready)));
@@ -111,25 +135,34 @@
       (measuredY && (!vertical.connected || !vertical.direction));
     el('manualZeroY').disabled = el('zeroY').disabled;
     el('pulleySetup').hidden = !measuredY;
-    el('pulleySave').disabled = !canMove || !measuredY;
+    el('pulleySave').disabled = !canMove || !measuredY || (vertical?.drive === 'stepper' && vertical.motorArmed);
     paintWinchTuning(vertical, canMove && measuredY && !stopping);
+    const pulse = vertical?.pulseControl;
+    el('winchPulseStatus').textContent = pulse?.lastPulseMs
+      ? `${pulse.direction === 'up' ? 'Up' : 'Down'} · pulse ${pulse.pulses}: ${pulse.lastPulseMs} ms (${pulse.reason || pulse.strategy}) · ${pulse.phase || 'last move'}`
+        + (Number.isFinite(pulse.lastTravelInches) && Number.isFinite(pulse.actualPulseMs) ? ` · last settled pulse: ${pulse.lastTravelInches.toFixed(2)} in from ${pulse.actualPulseMs.toFixed(0)} ms` : '')
+      : 'Pulse timing and measured travel will appear here during a distance move.';
     if (measuredY && el('pulleySetup').dataset.boot !== roof.bootId) {
       el('pulleySetup').dataset.boot = roof.bootId;
       el('pulleyTravel').value = Number(vertical.inchesPerTurn.toFixed(6));
+      el('pulleyDirection').value = String(vertical.direction);
       el('pulleyHoldDown').checked = vertical.holdToRunDown ?? vertical.holdToRun;
       el('pulleyHoldUp').checked = vertical.holdToRunUp ?? vertical.holdToRun;
       el('timedY').checked = !!vertical.estimated;
       el('timedSpeed').value = vertical.timedSpeed ?? 1;
     }
     el('pulleyCount').textContent = vertical?.rawCounts ?? '—';
-    el('yMode').textContent = vertical?.estimated ? 'Timed estimate · no encoder' : isPreview && vertical?.connected ? 'Simulated pulley' : measuredY ? (vertical.connected ? 'Pico 2 connected' : 'Pico 2 unavailable')
+    el('yMode').textContent = vertical?.estimated ? 'Timed estimate · no encoder' : isPreview && vertical?.connected ? 'Simulated pulley' : measuredY ? (vertical.connected ? 'Y encoder connected' : vertical.encoderUsbConnected ? 'Y encoder connected · no PWM' : 'Y encoder not reporting')
       : vertical ? 'Simulated' : 'Unavailable';
     el('xMode').textContent = isPreview && horizontal?.connected ? 'Simulated carriage' : horizontal?.connected === true ? 'Nano Every connected'
       : horizontal?.connected === false ? 'Nano Every unavailable'
       : horizontal?.mode === 'live' ? 'Live motor' : horizontal?.ready ? 'Simulated' : 'Unavailable';
-    el('xMovementStatus').textContent = xMessage || horizontal?.message || 'Waiting for the X controller.';
-    el('yMovementStatus').textContent = yMessage || vertical?.message || (vertical?.zeroed
-      ? 'Y increases downward from the roof.' : 'Set zero when the robot is at the top.');
+    const xReadyMessage = horizontal?.drive === 'stepper' ? window.blueStepperControls?.readiness('x', horizontal) : '';
+    const yReadyMessage = vertical?.drive === 'stepper' ? window.blueStepperControls?.readiness('y', vertical) : '';
+    el('xMovementStatus').textContent = xReadyMessage ? [xMessage, xReadyMessage].filter(Boolean).join(' ')
+      : xMessage || horizontal?.message || 'Waiting for the X controller.';
+    el('yMovementStatus').textContent = yReadyMessage ? [yMessage, yReadyMessage].filter(Boolean).join(' ')
+      : yMessage || vertical?.message || (vertical?.zeroed ? 'Y increases downward from the roof.' : 'Set zero when the robot is at the top.');
     el('winchMode').textContent = live && !isPreview ? 'Live winch' : 'Simulated winch';
     el('winchHint').textContent = relays?.autoArm ? 'Each jog sends Start, the pulse chosen in Setup, then Stop.'
       : upOnly ? 'Start arms Up. Stop disarms it.'
@@ -240,7 +273,7 @@
   }
 
   async function waitForMove(axis, id, bootId, signal) {
-    const deadline = performance.now() + (axis === 'y' ? 94000 : 15000);
+    const deadline = latest?.roof.data?.[axis + 'Axis']?.drive === 'stepper' ? Infinity : performance.now() + (axis === 'y' ? 94000 : 15000);
     while (performance.now() < deadline) {
       signal?.throwIfAborted();
       const roof = window.blueInspection.state()?.roof.data;
@@ -315,7 +348,7 @@
     xMessage = stopping ? 'Stopping X…' : 'Sending X move…';
     paint();
     try {
-      const result = await sendAxis('x', {id, action, inches, mode: roof?.xAxis?.mode, cancelId});
+      const result = await sendAxis('x', {id, action, inches, mode: roof?.xAxis?.mode, cancelId, armId: roof?.xAxis?.armId});
       if (!stopping && result.moveId === id) {
         xMessage = '';
         return await waitForMove('x', id, roof.bootId, signal);
@@ -337,12 +370,35 @@
 
   function stopX() {
     distanceControllers.x?.abort();
-    return xRequestId ? moveXJog('stop') : Promise.resolve();
+    return xRequestId || latest?.roof.data?.xAxis?.drive === 'stepper' ? moveXJog('stop') : Promise.resolve();
   }
+
+  el('zeroX').onclick = async () => {
+    if (el('zeroX').disabled) return;
+    const roof = window.blueInspection.state()?.roof.data;
+    const id = window.brickStorage.id();
+    xRequestId = id;
+    xMessage = 'Setting X zero…';
+    paint();
+    try {
+      const result = await sendAxis('x', {id, action: 'zero', mode: roof?.xAxis?.mode});
+      if (latest?.roof.data?.bootId === roof?.bootId) {
+        latest.roof.data.xAxis = result;
+        Object.assign(latest.roof.data.position, {x: result.counts, xInches: result.inches, xZeroInches: result.zeroInches});
+      }
+      xMessage = 'X zero set at this position.';
+    } catch (error) {
+      xMessage = 'Could not set X zero. ' + error.message;
+    } finally {
+      if (xRequestId === id) xRequestId = null;
+      paint();
+      poll();
+    }
+  };
 
   function stopY() {
     distanceControllers.y?.abort();
-    if (!yRequestId) return Promise.resolve();
+    if (!yRequestId && latest?.roof.data?.yAxis?.drive !== 'stepper') return Promise.resolve();
     return sendAxis('y', {id: window.brickStorage.id(), action: 'stop', cancelId: yRequestId});
   }
 
@@ -358,7 +414,7 @@
     yMessage = '';
     paint();
     try {
-      const result = await sendAxis('y', {id, action, inches, mode,
+      const result = await sendAxis('y', {id, action, inches, mode, armId: roof?.yAxis?.armId,
         motionEpoch: roof?.relays.motionEpoch, routeLimitInches, ...calibration});
       if (moving) {
         if (result.moveId !== id) throw new Error('The Y move was not acknowledged.');
@@ -381,6 +437,10 @@
     const motions = [];
     if (xRequestId && latest.roof.data.xAxis?.connected) motions.push(['x', xRequestId]);
     if (yRequestId) motions.push(['y', yRequestId]);
+    for (const axis of ['x', 'y']) {
+      const state = latest.roof.data[axis + 'Axis'];
+      if (state?.drive === 'stepper' && state.motorArmed && !state.moving && state.armId) motions.push([axis, state.armId]);
+    }
     if (!motions.length) return;
     renewing = true;
     try {
@@ -389,9 +449,29 @@
       renewing = false;
     }
   }, 500);
+  async function motorTurns(axis, direction, turns) {
+    if (window.blueInspection.movementBusy() || inspectionBusy) throw new Error('Wait for movement to finish.');
+    const roof = window.blueInspection.state()?.roof.data;
+    const id = window.brickStorage.id();
+    if (axis === 'x') xRequestId = id; else {yRequestId = id; ySending = true;}
+    paint();
+    try {
+      const result = await sendAxis(axis, {id, action: 'rotate', turns, direction, mode: 'live', armId: roof?.[axis + 'Axis']?.armId});
+      if (result.moveId !== id) throw new Error('Motor turn was not acknowledged.');
+      return await waitForMove(axis, id, roof.bootId);
+    } catch (error) {
+      await sendAxis(axis, {id: window.brickStorage.id(), action: 'stop', cancelId: id}).catch(() => {});
+      throw error;
+    } finally {
+      if (axis === 'x' && xRequestId === id) xRequestId = null;
+      if (axis === 'y' && yRequestId === id) {yRequestId = null; ySending = false;}
+      paint(); poll();
+    }
+  }
+
   function stopDistanceMoves() {
-    if (distanceControllers.x) stopX().catch(() => {});
-    if (distanceControllers.y) stopY().catch(() => {});
+    if (distanceControllers.x || latest?.roof.data?.xAxis?.drive === 'stepper') stopX().catch(() => {});
+    if (distanceControllers.y || latest?.roof.data?.yAxis?.drive === 'stepper') stopY().catch(() => {});
   }
   window.addEventListener('pagehide', stopDistanceMoves);
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopDistanceMoves(); });
@@ -485,6 +565,7 @@
     try {
       await moveY('calibrate', undefined, {calibration: {
         inchesPerTurn: travel.valueAsNumber,
+        direction: Number(el('pulleyDirection').value),
         timedY: el('timedY').checked, timedSpeed: speed.valueAsNumber,
         holdToRunDown: el('pulleyHoldDown').checked,
         holdToRunUp: el('pulleyHoldUp').checked
@@ -700,6 +781,30 @@
     tapId = null;
     tapRequest('stop', id, true).catch(() => {});
   }
+
+  async function setLed(brightness) {
+    if (ledBusy) return;
+    ledBusy = true; ledEditing = false; ledError = ''; paint();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch('/api/led', {method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Photo-Token': token},
+        body: JSON.stringify({brightness}), signal: controller.signal});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Light command failed.');
+      if (latest?.robot?.data) latest.robot.data.led = result;
+      if (brightness > 0) ledLastOn = brightness;
+    } catch (error) { ledError = error.message || 'Light acknowledgement unavailable.'; }
+    finally { clearTimeout(timer); ledBusy = false; paint(); }
+  }
+  el('ledToggle').onclick = () => setLed(latest?.robot?.data?.led?.brightness > 0 ? 0 : ledLastOn);
+  el('ledBrightness').oninput = () => {
+    ledEditing = true;
+    el('ledBrightnessValue').textContent = el('ledBrightness').value + '%';
+  };
+  // Send once when the slider is released, rather than on every pointer movement.
+  el('ledBrightness').onchange = () => setLed(el('ledBrightness').valueAsNumber);
 
   el('tapOnce').onclick = () => tapCommand('single');
   el('strengthTap').onclick = () => tapCommand('single');

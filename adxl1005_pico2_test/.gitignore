@@ -1,0 +1,5 @@
+build/
+captures/
+.venv/
+__pycache__/
+.cache/

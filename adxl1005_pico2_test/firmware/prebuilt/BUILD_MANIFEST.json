@@ -1,0 +1,36 @@
+{
+  "preparedOn": "2026-11-23",
+  "board": "pico2",
+  "target": "rp2350-arm-s",
+  "sdkVersion": "2.2.0",
+  "sdkCommit": "a1438dff1d38bd9c65dbd693f0e5db4b9ae91779",
+  "tinyUsbCommit": "86ad6e56c1700e85f1c5678607a762cfe3aa2f47",
+  "compiler": "GNU Arm Embedded 12.3.1",
+  "sampleRateHz": 250000,
+  "defaultMovingMassGrams": 73,
+  "input": {
+    "VDD": "3V3 OUT / physical 36",
+    "GND": "AGND / physical 33",
+    "Vout": "GP26 / physical 31",
+    "OR": "GP15 / physical 20"
+  },
+  "uf2": {
+    "file": "adxl1005_test.uf2",
+    "sha256": "9e92b69ff013325135ae25d2ee7b3c65d3a2fc9f45393a38d440ab3a748072d8"
+  },
+  "sourceSha256": {
+    "firmware/main.c": "533e5a3e6b9382746c481d21fbd213213c2451d72e726b966375bf51deb1454a",
+    "firmware/capture_core.h": "85f23ab3a80da241b1cca59d748780fa336598546e79e169c73d4c39a1f91c72",
+    "firmware/CMakeLists.txt": "b6d5c55836265981b4044785c35ea59e15b6cddc52764976daf27f82da93d5da"
+  },
+  "verification": {
+    "pythonTestsPassed": 13,
+    "captureCoreTests": "Passed: pretrigger, wrap, trigger, ADC errors, overwrite checks, CRC",
+    "build": "Passed; picotool identified RP2350 ARM Secure / pico2 image",
+    "flashBytes": 93020,
+    "bssBytes": 135300,
+    "demo": "Generated CSV/JSON/raw/PNG from synthetic waveform; plot visually inspected",
+    "hardware": "Not flashed; no physical Pico, accelerometer, timing or force validation",
+    "mainUi": "No changes; separate project and laptop recorder"
+  }
+}

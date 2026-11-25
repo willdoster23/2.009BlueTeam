@@ -3,11 +3,12 @@
   const score = window.brickTapScore;
   const storage = window.brickStorage;
   const baselineKey = 'brick-mapper-tap-baseline';
-  const cutoff = 10;
+  const cutoff = 5;
   const panels = new WeakMap();
   const validMel = values => Array.isArray(values) && values.length === 64 && values.every(Number.isFinite);
-  const validBaseline = value => value && typeof value.name === 'string' && value.name.length <= 256 && validMel(value.mel);
-  const validAnalysis = value => value && score.validTimes(value.times) && validMel(value.mel);
+  const currentAlgorithm = value => value?.algorithm === score.algorithm;
+  const validBaseline = value => value && currentAlgorithm(value) && typeof value.name === 'string' && value.name.length <= 256 && validMel(value.mel);
+  const validAnalysis = (value, allowLegacy = false) => value && (allowLegacy || currentAlgorithm(value)) && score.validTimes(value.times) && validMel(value.mel);
   const el = id => document.getElementById(id);
 
   function readBaseline() {
@@ -22,7 +23,7 @@
   let baseline = readBaseline();
   function announceBaseline() {
     el('baselineStatus').textContent = baseline ? 'Baseline: ' + baseline.name
-      : 'On a known good brick, record the baseline to start scoring.';
+      : 'Record or import a baseline for the updated scoring calculation.';
     el('recordBaseline').textContent = baseline ? 'Record new baseline' : 'Record baseline';
     window.dispatchEvent(new Event('brickanalysischange'));
   }
@@ -44,19 +45,21 @@
     if (!baseline && validBaseline(value)) setBaseline(value);
   }
 
-  function calculate(wav) {
+  function calculate(wav, previous) {
     try {
       const samples = score.samplesFromBase64(wav);
-      const timing = score.burstTimes(samples);
-      return timing ? {...timing, mel: score.spectrum(samples, timing.times)} : null;
+      const timing = score.validTimes(previous?.times, samples.length)
+        ? {times: previous.times, source: previous.source} : score.burstTimes(samples);
+      return timing ? {...timing, mel: score.spectrum(samples, timing.times), algorithm: score.algorithm} : null;
     } catch {
       return null;
     }
   }
 
   function useRecordingBaseline(wav, name, analysis = calculate(wav)) {
+    if (!validAnalysis(analysis)) analysis = calculate(wav, analysis);
     if (!validAnalysis(analysis)) throw new Error('The recording was silent, incomplete, or unreadable. Record the baseline again.');
-    setBaseline({name: name.slice(0, 256), mel: analysis.mel});
+    setBaseline({name: name.slice(0, 256), mel: analysis.mel, algorithm: score.algorithm});
   }
 
   function result(record) {
@@ -80,7 +83,7 @@
 
     const controller = new AbortController();
     panels.set(container, controller);
-    let analysis = record.tap_analysis ?? calculate(wav);
+    let analysis = validAnalysis(record.tap_analysis) ? record.tap_analysis : calculate(wav, record.tap_analysis);
     const summary = document.createElement('p');
     summary.className = 'tap-score-result';
     const actions = document.createElement('div');
@@ -150,7 +153,7 @@
       try {
         const samples = score.samplesFromBase64(wav);
         const times = inputs.map(input => input.valueAsNumber);
-        const next = {times, mel: score.spectrum(samples, times), source: 'entered'};
+        const next = {times, mel: score.spectrum(samples, times), source: 'entered', algorithm: score.algorithm};
         if (persist) await persist(next);
         analysis = next;
         paint();
@@ -166,7 +169,7 @@
     container.append(summary, actions, details, feedback);
     window.addEventListener('brickanalysischange', paint, {signal: controller.signal});
     paint();
-    if (persist && analysis && !record.tap_analysis) {
+    if (persist && analysis && !validAnalysis(record.tap_analysis)) {
       persist(analysis, {ifMissing: true}).catch(error => { feedback.textContent = error.message; });
     }
   }
@@ -182,7 +185,7 @@
       if (wav.size > 8 * 1024 * 1024 || csv.size > 65536) throw new Error('The baseline files are too large.');
       const samples = score.decodeWav(new Uint8Array(await wav.arrayBuffer()));
       const times = score.readTimes(await csv.text(), samples.length);
-      setBaseline({name: wav.name.slice(0, 256), mel: score.spectrum(samples, times)});
+      setBaseline({name: wav.name.slice(0, 256), mel: score.spectrum(samples, times), algorithm: score.algorithm});
       el('baselineFileFeedback').textContent = 'Baseline imported.';
     } catch (error) {
       el('baselineFileFeedback').textContent = error.message;

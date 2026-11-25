@@ -95,6 +95,13 @@ def tap(payload):
         return 503, {'error': 'Robot tap controller is unavailable'}
 
 
+def led(payload):
+    try:
+        return request('robot', '/api/led', payload)
+    except (OSError, ValueError, http.client.HTTPException):
+        return 503, {'error': 'Robot LED controller is unavailable.'}
+
+
 def camera(payload):
     roof = status()['roof']
     if roof['reachable'] and any((roof['data'].get(axis) or {}).get('moving') for axis in ('xAxis', 'yAxis')):

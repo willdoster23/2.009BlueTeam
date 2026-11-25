@@ -5,6 +5,7 @@
 :root{color-scheme:light dark;--bg:#f4f5f7;--panel:#fff;--text:#1d2330;--muted:#697386;--line:#d5d9e2;--slot:#eceef3;--accent:#245cce;--ok:#148047;--bad:#c63636;--ok-fill:#edf9f1;--bad-fill:#fff0f0}
 @media(prefers-color-scheme:dark){:root{--bg:#14171d;--panel:#1c2028;--text:#e7eaf0;--muted:#a2aaba;--line:#384150;--slot:#232833;--accent:#83acff;--ok:#67dfa0;--bad:#ff8a8a;--ok-fill:#143026;--bad-fill:#382020}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,sans-serif}header{background:var(--panel);border-bottom:1px solid var(--line);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.eyebrow{font-size:12px;color:var(--muted);letter-spacing:.12em}h1{font-size:23px;margin:2px 0 0}h2{font-size:18px;margin:0}p{margin:6px 0 14px;color:var(--muted)}a{color:var(--accent)}main{max-width:1400px;margin:auto;padding:24px}.capture{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(285px,1fr);gap:24px}.camera{background:#000;border-radius:10px;position:relative;overflow:hidden;aspect-ratio:16/9;max-height:350px}video{width:100%;height:100%;object-fit:contain}.overlay{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:#111c;color:#fff;padding:20px;pointer-events:none}.overlay small{display:block;margin-top:10px}.hidden{display:none!important}.form-panel{background:var(--panel);padding:20px;border:1px solid var(--line);border-radius:10px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:flex;flex-direction:column;gap:6px;font-weight:500}input,select,button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 11px}input{width:100%;min-width:0}button{cursor:pointer}button:hover{filter:brightness(.94)}button:disabled{cursor:default;opacity:.5}button.primary{background:#2f6fed;border-color:#2f6fed;color:#fff}.wide{grid-column:1/-1}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0 0}.status{font-weight:500;color:var(--muted)}.status.live{color:var(--ok)}.status.bad{color:var(--bad)}.hint{font-size:12px}.feedback{font-size:13px;overflow-wrap:anywhere;min-height:38px;margin-top:12px}.summary{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:24px 0 16px}.count{border-radius:6px;background:var(--panel);border:1px solid var(--line);padding:7px 12px}.good-text{color:var(--ok)}.bad-text{color:var(--bad)}.map-head{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}.tabs{display:flex;gap:6px}button[aria-pressed=true]{background:var(--text);color:var(--panel)}.map-wrap{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:auto;max-height:740px;margin-top:14px}.map-grid{display:grid;gap:10px;padding:14px;min-width:100%;width:max-content}.axis{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}.corner{font-weight:600}.tile{position:relative;aspect-ratio:1/1;background:var(--slot);border:2px dashed var(--line);border-radius:8px;overflow:hidden;min-width:0;display:flex;align-items:center;justify-content:center}.tile.filled{border:3px solid var(--ok);padding:0;background:var(--ok-fill)}.tile.filled.bad{border-color:var(--bad);background:var(--bad-fill)}.tile img{width:100%;height:100%;object-fit:cover;display:block}.tile .badge,.tile .position,.tile .retakes{position:absolute;z-index:1;font-size:11px;padding:3px 7px;border-radius:5px;background:#111d;color:#fff}.tile .badge{top:6px;left:6px;background:var(--ok);color:var(--panel);font-weight:600}.tile.bad .badge{background:var(--bad)}.tile .position{bottom:6px;left:6px}.tile .retakes{top:6px;right:6px}.tile.empty{color:var(--muted);font-size:12px}.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:14px 0}.empty-state{padding:32px;text-align:center;color:var(--muted)}.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}.legend span::before{content:'';display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;background:var(--ok)}.legend .bad-key::before{background:var(--bad)}.legend .empty-key::before{background:var(--slot);border:1px dashed var(--line)}details{margin-top:28px;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;color:var(--muted)}.metrics{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.metrics>div{min-width:110px}.metrics span{display:block;font-size:12px;color:var(--muted)}#history{width:100%;height:45px;background:var(--slot)}#events{font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;max-height:160px;overflow:auto;color:var(--muted)}dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);max-width:850px;width:calc(100% - 32px);max-height:90vh;overflow:auto;padding:20px}dialog::backdrop{background:#000a}.dialog-head{display:flex;justify-content:space-between;gap:12px;align-items:center}#largePhoto{width:100%;max-height:50vh;object-fit:contain;background:#000;border-radius:6px;margin-top:12px}.thumbs{display:flex;gap:8px;overflow:auto;margin-top:12px}.thumbs button{padding:2px;min-width:75px;width:75px}.thumbs img{width:100%;height:55px;object-fit:cover}.dialog-meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}button.good{border-color:var(--ok);color:var(--ok)}button.bad{border-color:var(--bad);color:var(--bad)}[hidden]{display:none!important}@media(max-width:760px){main{padding:15px}.capture{grid-template-columns:1fr}header{padding:15px}.camera{max-height:280px}.map-head{align-items:flex-start}h1{font-size:20px}}
+.emergency-stop{background:#cf1524!important;color:#fff!important;border:3px solid #ff8b94!important;font-size:21px;font-weight:800;min-height:72px;padding:14px 22px}.stepper-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.motor-status{font-size:13px;line-height:1.6}.stepper-manual{grid-column:1/-1;width:100%;min-width:0;border-top:1px solid var(--line);padding-top:12px;margin-top:12px}@media(max-width:520px){.stepper-fields{grid-template-columns:1fr}.emergency-stop{width:100%}}
 </style>
 <style>
 .system-status{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}.system-status span{padding:6px 10px;border:1px solid var(--line);border-radius:20px}.system-status .online{color:var(--ok)}.system-status .offline{color:var(--bad)}.simulation{display:inline-block;background:#fff3cf;color:#795600;border:1px solid #e6cc83;border-radius:5px;padding:3px 8px;font-size:12px}.operator-panel{margin-bottom:18px}.operator-bar{margin-top:8px}.operator-panel p{margin-bottom:6px}.operator-panel .relay-lights{margin-top:8px}.operator-panel #winchFeedback{margin:7px 0 0;min-height:0}.control-card{background:var(--panel);padding:16px;border:1px solid var(--line);border-radius:10px}.relay-lights{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.relay-light{padding:6px 9px;background:var(--slot);border:1px solid var(--line);border-radius:5px;font-size:12px}.relay-light.on{background:var(--ok-fill);color:var(--ok);border-color:var(--ok)}.stop-button{border-color:var(--bad);color:var(--bad);font-weight:600}#winchFeedback{min-height:20px}.diagnostic-addresses{font:12px/1.7 ui-monospace,monospace}.capture .form-panel{padding:16px}.camera{max-height:330px}.feedback{min-height:20px}
@@ -120,6 +121,24 @@ textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var
 @media(max-width:720px){.page-nav{padding:8px 12px;overflow:auto}.page-nav a{padding:9px 12px;white-space:nowrap}.workspace{display:block}.camera-pane{top:58px}.camera{max-height:39dvh}.workspace-controls{padding-top:16px}.current-operation{margin-top:8px}html{scroll-padding-top:calc(39dvh + 220px)}}
 @media print{.page-nav{display:none}}
 
+
+.route-path-preview{margin:16px 0;color:var(--text)}
+.route-path-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.route-path-heading h3{margin:0;font-size:15px}
+.route-path-preview svg{display:block;width:100%;height:270px;margin-top:8px}
+.route-path-preview svg[hidden]{display:none}
+.route-path-preview .route-preview-meta{margin:8px 0 0;font-size:12px;color:var(--muted)}
+.route-path-preview .route-preview-status{min-height:1.5em;margin:5px 0 0;font-size:12px;color:var(--muted)}
+.route-path-preview .route-preview-empty{padding:24px 0;color:var(--muted);font-size:13px}
+.route-path-preview .route-preview-grid{stroke:var(--line);stroke-width:1;fill:none}
+.route-path-preview .route-preview-line{stroke:var(--accent);stroke-width:3;fill:none;stroke-linejoin:round;stroke-linecap:round;opacity:.45}
+.route-path-preview .route-preview-trace{stroke:var(--accent);stroke-width:3.5;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.route-path-preview .route-preview-dot{fill:var(--panel);stroke:var(--accent);stroke-width:1.5}
+.route-path-preview .route-preview-label{fill:var(--muted);font:11px system-ui,sans-serif}
+.route-path-preview .route-preview-endpoint{fill:var(--text);font:600 11px system-ui,sans-serif}
+.route-path-preview .route-preview-direction{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round}
+.route-path-preview .route-preview-marker{fill:var(--accent);stroke:var(--panel);stroke-width:2;stroke-linejoin:round}
+
 </style></head><body data-preview="__PREVIEW__">
 <header><div><div class="eyebrow">2.009 BLUE TEAM · INSPECTION PROTOTYPE</div><h1>Inspection control</h1></div><div class="header-actions"><span class="status" id="status" role="status">Connecting…</span><button id="newJob" type="button">Start new job</button><div class="poweroff-controls"><button class="stop-button" disabled="" id="poweroff" type="button">Shut down both Pis</button><p class="hint" id="poweroffStatus" role="status"></p></div></div></header><nav aria-label="Inspection pages" class="page-nav"><a data-page-link="setup" href="#setup">Setup</a><a data-page-link="manual" href="#manual">Manual</a><a data-page-link="automatic" href="#automatic">Automatic inspection</a></nav>
 <main>
@@ -136,21 +155,34 @@ textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var
 <section aria-label="Live camera" class="camera-pane">
 <div class="camera"><video autoplay="" controls="" id="video" muted="" playsinline=""></video><canvas aria-label="Perspective-corrected camera view" class="corrected-video" hidden="" id="correctedVideo"></canvas><div class="overlay" id="overlay"><div id="message">Connecting…</div><small id="detail">Waiting for the robot camera.</small></div></div>
 <div class="camera-tools"><button aria-pressed="false" id="audioToggle" type="button">Listen to microphone</button><button id="start">Reconnect video</button><label class="lens-option" hidden="" id="lensOption"><input checked="" id="lensToggle" type="checkbox"/>Lens correction</label><button hidden="" id="resume">Resume video</button><p class="hint" id="linkStatus" role="status">Checking camera connection…</p></div><div class="camera-tools" hidden="" id="cameraModeTools"><label>Raw camera mode<select id="cameraMode"></select></label><p class="hint" id="cameraModeStatus" role="status"></p></div>
+<div class="camera-tools" aria-label="Inspection light"><button id="ledToggle" type="button" aria-pressed="false" disabled>Turn light on</button><label>Light brightness <output id="ledBrightnessValue">0%</output><input id="ledBrightness" type="range" min="0" max="100" step="1" value="0" disabled></label><p class="hint" id="ledStatus" role="status">Connecting to light…</p></div>
 <audio id="microphone"></audio><p class="hint" id="audioStatus" role="status">Microphone playback is off.</p>
 <div aria-live="polite" class="system-status"><span id="robotState">Camera unit · checking</span><span id="roofState">Winch controller · checking</span><span id="exchangeState">Data link · checking</span></div>
-<section class="current-operation"><div class="actions"><button class="stop-button" id="stopAll" type="button">Stop all</button><button class="stop-button" disabled="" hidden="" id="tapStop" type="button">Stop tap</button><button class="stop-button" hidden="" id="inspectionCancel" type="button">Cancel step</button></div><p class="hint" id="inspectionStatus" role="status">Ready to simulate the next step.</p><p class="hint" id="inspectionSaveStatus" role="status"></p></section></section>
+<section class="current-operation"><div class="actions"><button class="emergency-stop" id="stopAll" type="button">E-STOP · Stop all</button><button class="stop-button" disabled="" hidden="" id="tapStop" type="button">Stop tap</button><button class="stop-button" hidden="" id="inspectionCancel" type="button">Cancel step</button></div><p class="hint" id="stepperStopHint" hidden>E-STOP stops step pulses and disarms commands. Driver holding current remains enabled.</p><p class="hint" id="inspectionStatus" role="status">Ready to simulate the next step.</p><p class="hint" id="inspectionSaveStatus" role="status"></p></section></section>
 <div class="workspace-controls"><div aria-label="Setup" class="operator-page" data-page="setup" hidden="" id="page-setup"><section class="control-card"><h2>Operation mode</h2><label>Inspection mode<select id="inspectionMode"><option value="simulation">Simulate</option><option value="hardware">Use hardware</option></select></label></section><section class="control-card" id="tapStrengthTools"><h2>Tap strength</h2>
 <label>Peak PWM <output id="tapStrengthValue">210 / 255 · 82%</output><input id="tapStrength" max="255" min="0" step="1" type="range" value="210"/></label>
 <label>Peak duration <output id="tapDurationValue">50 ms</output><input id="tapDuration" max="150" min="10" step="5" type="range" value="50"/></label>
 <p class="hint">Compare 50, 75, and 100 ms at the same PWM. Each peak is followed by a 30 ms hold. Longer pulses add heat. Record a new baseline after changing settings.</p>
 <div class="actions"><button disabled="" id="strengthTap" type="button">Test one tap</button><button id="strengthDefault" type="button">Reset defaults</button><a class="recording-shortcut" href="#manual">Open audio recordings</a></div>
 <p class="hint" id="strengthStatus" role="status"></p>
-</section><section class="control-card" id="winchTuningTools"><h2>Winch pulse settings</h2>
-<p class="hint">Set the first pulse for measured moves and the pulse for short manual jogs. Adjust, then apply.</p>
-<label>Up pulse <output id="winchUpPulseValue">400 ms</output><input id="winchUpPulse" min="10" max="1500" step="10" type="range" value="400"/></label>
-<label>Down pulse <output id="winchDownPulseValue">250 ms</output><input id="winchDownPulse" min="10" max="1500" step="10" type="range" value="250"/></label>
+</section><section class="control-card" id="stepperSetup" hidden><h2>Distance calibration</h2><p class="hint">Set these once for the mechanism. Speed and movement distance are on Manual. X uses commanded steps; Y distance is measured by the separate pulley encoder.</p><details class="secondary-tools"><summary>X · Across distance scale</summary>
+<label>Carriage travel per motor turn (in)<input id="xMotorTravel" type="number" min="0.001" step="any" value="2.968434"></label>
+<label class="review-flag"><input id="xMotorCalibrated" type="checkbox">This distance scale matches the installed mechanism</label>
+<details class="secondary-tools"><summary>Advanced driver settings</summary><div class="stepper-fields">
+<label>Driver pulses / revolution<input id="xMotorPpr" type="number" min="200" max="51200" step="1" value="1600"></label>
+<label>Acceleration (RPM / second)<input id="xMotorAccel" type="number" min="0.1" step="any" value="10"></label>
+<label>Motor direction<select id="xMotorSign"><option value="1">Normal</option><option value="-1">Reversed</option></select></label></div></details><div class="actions"><button id="xMotorSave">Save X calibration</button></div><p class="hint" id="xMotorSettingsStatus"></p></details><details class="secondary-tools"><summary>Y · Winch distance scale</summary>
+<label>Approximate cable travel per motor turn (in)<input id="yMotorTravel" type="number" min="0.001" step="any" value="12.566371"></label>
+<label class="review-flag"><input id="yMotorCalibrated" type="checkbox">This distance scale matches the installed mechanism</label>
+<details class="secondary-tools"><summary>Advanced driver settings</summary><div class="stepper-fields">
+<label>Driver pulses / revolution<input id="yMotorPpr" type="number" min="200" max="51200" step="1" value="1600"></label>
+<label>Acceleration (RPM / second)<input id="yMotorAccel" type="number" min="0.1" step="any" value="10"></label>
+<label>Motor direction<select id="yMotorSign"><option value="1">Normal</option><option value="-1">Reversed</option></select></label></div><label>Optional ALM input interpretation<select id="yMotorAlarm"><option value="0">Not wired / not verified</option><option value="1">HIGH means fault — verified</option><option value="2">LOW means fault — verified</option></select></label></details><div class="actions"><button id="yMotorSave">Save Y calibration</button></div><p class="hint" id="yMotorSettingsStatus"></p></details></section><section class="control-card" id="winchTuningTools"><h2>Winch pulse settings</h2>
+<p class="hint">These durations press the remote's direction buttons; they do not change motor speed. Each direction has its own settings. Adjust, then apply.</p>
+<label>Up first / short-jog pulse <output id="winchUpPulseValue">400 ms</output><input id="winchUpPulse" min="10" max="1500" step="10" type="range" value="400"/></label>
+<label>Down first / short-jog pulse <output id="winchDownPulseValue">250 ms</output><input id="winchDownPulse" min="10" max="1500" step="10" type="range" value="250"/></label>
 <label class="review-flag"><input checked="" id="winchAdaptive" type="checkbox"/>Adjust later pulses from encoder feedback</label>
-<p class="hint">Turn this off to repeat the chosen pulse duration. Position feedback still ends the move at its target.</p>
+<p class="hint">On: later pulses vary with measured travel and distance remaining, within the correction limits. Off: repeat the first-pulse duration. Encoder feedback stops either mode within half an inch of the target.</p>
 <details class="secondary-tools"><summary>Correction pulses and settling</summary>
 <h3>Up</h3>
 <label>Minimum correction pulse <output id="winchUpMinValue">80 ms</output><input id="winchUpMin" min="10" max="1500" step="10" type="range" value="80"/></label>
@@ -160,28 +192,98 @@ textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var
 <label>Minimum correction pulse <output id="winchDownMinValue">40 ms</output><input id="winchDownMin" min="10" max="1500" step="10" type="range" value="40"/></label>
 <label>Maximum correction pulse <output id="winchDownMaxValue">250 ms</output><input id="winchDownMax" min="10" max="1500" step="10" type="range" value="250"/></label>
 <label>Wait after each pulse <output id="winchDownSettleValue">700 ms</output><input id="winchDownSettle" min="50" max="2000" step="50" type="range" value="700"/></label>
-<p class="hint">If short corrections fail to move the winch, raise the minimum correction pulse or turn off adaptation. More settling time waits longer before measuring the result.</p>
+<p class="hint">Minimum and maximum bound later adaptive pulses. Raising the minimum above the first pulse also raises that first pulse; lowering the maximum below it lowers the first pulse. The wait starts after the direction and Stop commands finish. Corrections wait for the encoder to settle; two pulses without measurable travel stop the move. Start and Stop button presses are fixed at 300 ms, with a 200 ms gap after Start.</p>
 </details><div class="actions"><button disabled="" id="winchTuningSave" type="button">Apply winch settings</button><a href="#manual">Open manual controls</a></div>
+<p class="hint" id="winchPulseStatus" role="status">Pulse timing and measured travel will appear here during a distance move.</p>
 <p class="hint" id="winchTuningStatus" role="status">Waiting for saved winch settings…</p></section><section class="control-card"><h2>Reference recording</h2><div class=""><p class="hint" id="baselineStatus"></p>
 <div class="actions"><button disabled="" id="recordBaseline" type="button">Record baseline</button>
 <a class="recording-shortcut" href="#manual">Open audio recordings</a></div>
-<p class="hint" id="baselineFeedback" role="status"></p></div><div class="actions"><button id="chooseBaseline" type="button">Import baseline WAV + CSV</button><input accept=".wav,.csv,audio/wav,text/csv" hidden="" id="baselineFiles" multiple="" type="file"/></div><p class="hint" id="baselineFileFeedback" role="status"></p></section><section class="control-card"><h2>Wall reference</h2><div class="actions"><button disabled="" id="zeroY" title="Use at the roof to set the reference for future moves and captures." type="button">Set Y zero here</button><button id="routeReference" type="button">Set first brick here</button></div><p class="hint" id="brickReferenceStatus" role="status"></p><p class="hint">Set Y zero at your starting reference, then align the tapper with the first brick before saving its address.</p><details class="secondary-tools" hidden="" id="pulleySetup" open="">
+<p class="hint" id="baselineFeedback" role="status"></p></div><div class="actions"><button id="chooseBaseline" type="button">Import baseline WAV + CSV</button><input accept=".wav,.csv,audio/wav,text/csv" hidden="" id="baselineFiles" multiple="" type="file"/></div><p class="hint" id="baselineFileFeedback" role="status"></p></section><section class="control-card"><h2>Wall reference</h2><div class="actions"><button disabled="" id="zeroY" title="Use at the roof to set the reference for future moves and captures." type="button">Set Y zero here</button></div><p class="hint">Set Y zero at your starting reference. Plan and save your inspection route on Automatic Inspection.</p><details class="secondary-tools" hidden="" id="pulleySetup">
 <summary>Pulley setup</summary>
 <label class="review-flag"><input id="timedY" type="checkbox"/>Estimate Y using winch time</label>
 <label>Estimated winch speed (in/s)<input id="timedSpeed" max="20" min="0.1" required="" step="any" type="number" value="1"/></label>
 <p class="hint">Timed Y uses the duration of each relay pulse. Distances, the lower limit, and brick addresses are approximate. Check wall clearance and camera alignment.</p>
 <p class="hint">Raw pulley count <output id="pulleyCount">—</output>.</p>
+<label>Encoder direction<select id="pulleyDirection"><option value="1">Normal</option><option value="-1">Reversed</option></select></label>
 <label>Cable travel per revolution (in)<input id="pulleyTravel" max="500" min="0.1" required="" step="any" type="number" value="6.283185"/></label>
 <label class="review-flag"><input id="pulleyHoldDown" type="checkbox"/>Down stops when the relay releases.</label>
 <label class="review-flag"><input id="pulleyHoldUp" type="checkbox"/>Up stops when the relay releases.</label>
 <p class="hint">Unchecked directions send an explicit Stop after each measured jog.</p>
 <button disabled="" id="pulleySave" type="button">Save pulley setup</button>
-</details></section><section class="control-card" id="routePlanner">
-<h2>Inspection route</h2>
+</details></section><details id="connectionDiagnostics"><summary>Connection diagnostics</summary><p class="diagnostic-addresses" id="deviceAddresses"></p><p class="hint" id="packetStatus"></p><div class="actions"><button id="stop">Stop video</button><button id="export">Save connection log</button></div><div class="metrics"><div><span>Received video</span><strong id="rate">—</strong></div><div><span>Frames / sec</span><strong id="fps">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div><div><span>Last frame</span><strong id="age">—</strong></div><div><span>Interruptions</span><strong id="drops">0</strong></div><div><span>Interrupted time</span><strong id="downtime">0 s</strong></div></div><p class="hint" id="route">Private Ethernet connection</p><canvas aria-label="Video availability timeline" id="history"></canvas><div aria-label="Connection event log" id="events"></div></details></div><div aria-label="Manual" class="operator-page" data-page="manual" id="page-manual"><section aria-labelledby="motionTitle" class="control-card">
+<h2 id="motionTitle">Move the robot</h2>
+<div class="motion-row">
+<h3>X · Across <span class="simulation" id="xMode">Checking</span></h3>
+<div class="y-reference"><output aria-label="Current X position" id="xReadout">—</output><button disabled="" id="zeroX" type="button">Set X zero here</button></div>
+<p class="hint">Sets the current X position to zero without moving. Set it again after restarting or reconnecting the X controller.</p>
+<div class="stepper-manual" id="xStepperManual" hidden>
+<div class="stepper-fields"><label>Motor speed (RPM)<input id="xMotorRpm" type="number" min="0.1" step="any" value="3"></label><div class="actions"><button id="xMotorSpeedSave" type="button">Apply speed</button></div></div>
+<p class="hint" id="xMotorSpeedStatus"></p>
+<div class="actions"><button class="primary" id="xMotorArm" type="button">Arm X motor</button><button class="emergency-stop" id="xMotorEstop" type="button">E-STOP</button></div>
+<p class="motor-status" id="xMotorStatus"></p><p class="hint" id="xMotorFeedback"></p>
+</div>
+<label>Move distance (in)<input id="xDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label>
+<div class="actions"><button disabled="" id="moveLeft" type="button">← Left</button><button disabled="" id="moveRight" type="button">Right →</button><button class="stop-button" disabled="" id="stopX" type="button">Stop X</button></div>
+<p class="hint" id="xMovementStatus" role="status"></p><div id="xStepperDiagnostics" hidden><details class="secondary-tools"><summary>Advanced motor-turn test</summary><label>Motor turns<input id="xMotorTurns" type="number" min="0.000001" step="any" value="0.125"></label><div class="actions"><button id="xMotorPositive">Move positive</button><button id="xMotorNegative">Move negative</button></div></details></div>
+</div>
+<div class="motion-row">
+<h3>Y · Down from roof <span class="simulation" id="yMode">Checking</span></h3>
+<div class="y-reference"><output aria-label="Current Y position" id="yReadout">—</output><button disabled="" id="manualZeroY" type="button">Set Y zero here</button></div>
+<div class="stepper-manual" id="yStepperManual" hidden>
+<div class="stepper-fields"><label>Motor speed (RPM)<input id="yMotorRpm" type="number" min="0.1" step="any" value="3"></label><div class="actions"><button id="yMotorSpeedSave" type="button">Apply speed</button></div></div>
+<p class="hint" id="yMotorSpeedStatus"></p>
+<div class="actions"><button class="primary" id="yMotorArm" type="button">Arm Y motor</button><button class="emergency-stop" id="yMotorEstop" type="button">E-STOP</button></div>
+<p class="motor-status" id="yMotorStatus"></p><p class="hint" id="yMotorFeedback"></p>
+</div>
+<label>Move distance (in)<input id="yDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label>
+<div class="actions"><button disabled="" id="moveYUp" type="button">↑ Up</button><button disabled="" id="moveYDown" type="button">↓ Down</button><button class="stop-button" disabled="" hidden="" id="stopY" type="button">Stop Y</button></div>
+<p class="hint" id="yMovementStatus" role="status"></p><div id="yStepperDiagnostics" hidden><details class="secondary-tools"><summary>Advanced motor-turn test</summary><label>Motor turns<input id="yMotorTurns" type="number" min="0.000001" step="any" value="0.125"></label><div class="actions"><button id="yMotorPositive">Move positive</button><button id="yMotorNegative">Move negative</button></div></details></div>
+</div>
+</section><section class="control-card"><h2>Tap and record</h2><div class="actions"><button class="primary" disabled="" id="tapOnce" type="button">Tap once</button><button disabled="" id="tapBurst" type="button">Tap 3 times (2 Hz)</button><button class="primary" id="brickTapHere" type="button">Record 3 taps + photo</button></div><p class="hint">Records three taps at 2 Hz and saves the photo, audio, and score at the current X and Y.</p><p class="feedback" id="stationaryStatus" role="status"></p><p class="hint" id="tapStatus" role="status">Waiting for the robot tap controller…</p></section><section aria-label="Capture and position">
+<div class="form-panel"><h2>Take a photo</h2><p class="hint">Capture the current camera view at the displayed X and Y. Open the saved photo in the brick map below.</p>
+<div class="fields"><label>X position (in)<input id="encoderX" readonly="" type="number"/></label><label>Y position (in)<input id="encoderY" readonly="" type="number"/></label><label class="wide">Brick condition<select id="brickStatus"><option value="unknown">Unclassified</option><option value="good">Good · green</option><option value="bad">Bad · red</option></select></label></div>
+<button class="primary" disabled="" id="photo" type="button">Take photo and save to map</button><div class="feedback" id="photoStatus" role="status"></div>
+<p class="hint" id="positionStatus">Waiting for position…</p>
+</div>
+</section><section class="control-card" id="tapRecordings"><h2>Audio recordings</h2>
+<p class="hint" id="recordingsEmpty">Tap once or record three taps to add a recording. Play it here or download the WAV.</p>
+<p class="hint" id="audioSaveStatus" role="status">Recordings are saved automatically in this browser for this job.</p>
+<ol id="tapClips"></ol>
+<p class="hint">Inspection-route recordings are also available by opening a brick on the map.</p></section><details id="legacyWinchControls" aria-label="Inspection controls" class="control-card operator-panel"><summary>Short winch jogs</summary><p class="hint"><span class="simulation" id="winchMode">Winch controls</span> <span id="winchHint"></span></p><div class="actions operator-bar"><button disabled="" id="winchStart" type="button">Arm winch</button><button disabled="" id="winchUp" type="button">↑ Up</button><button disabled="" id="winchDown" type="button">↓ Down</button><button class="stop-button" disabled="" id="winchStop" type="button">Stop winch</button></div>
+<details class="secondary-tools"><summary>Relay status</summary><div aria-label="Relay contacts" class="relay-lights"><span class="relay-light" id="relay1">CH1 · Stop</span><span class="relay-light" id="relay2">CH2 · Start</span><span class="relay-light" id="relay3">CH3 · Up</span><span class="relay-light" id="relay4">CH4 · Down</span></div></details><p class="hint" id="winchFeedback" role="status">Waiting for controller…</p>
+</details></div><div aria-label="Automatic inspection" class="operator-page" data-page="automatic" hidden="" id="page-automatic"><section aria-labelledby="inspectionTitle" class="control-card">
+<h2 id="inspectionTitle">Automatic inspection</h2><p aria-live="polite" class="hint" id="routeSummary"></p>
+<p class="hint">Run Route moves through every saved stop automatically. Open any saved brick to inspect its photo, recordings, and score. Pause Route takes a break after the current stop is saved; Stop Route interrupts immediately.</p>
+<p class="hint">Each three-tap recording is compared with your baseline: similar results are green and different results are red on the map. <a href="#setup">Record a baseline in Setup</a> to enable scoring; unscored stops remain unclassified.</p>
+<p class="hint">Y stops within half an inch above or below each planned position. After a failure, edit and Save Route to start a new run; saved recordings stay available.</p>
+<p class="feedback" id="routeSaveStatus" role="status">Save your route to enable Run Route.</p>
+<div class="actions"><button class="primary" id="routeSave" type="button">Save Route</button><button class="primary" disabled="" id="routeRun" type="button">Run Route</button><button hidden="" id="routePause" type="button">Pause Route</button><button class="primary" hidden="" id="routeResume" type="button">Resume Route</button><button class="stop-button" hidden="" id="routeStop" type="button">Stop Route</button></div>
+<p class="feedback" id="routeProgress" role="status" aria-live="polite"></p>
+<div class="route-path-preview" id="routePathPreview">
+<div class="route-path-heading"><h3 id="routePreviewTitle">Planned path</h3><button disabled="" id="routePreviewPlay" type="button">Preview Path</button></div>
+<p class="route-preview-meta" id="routePreviewMeta"></p>
+<svg id="routePreviewSvg" role="img" aria-labelledby="routePreviewTitle routePreviewMeta" hidden=""></svg>
+<p class="route-preview-empty" id="routePreviewEmpty">Enter the brick spacing and coverage to see the planned path.</p>
+<p class="route-preview-status" id="routePreviewStatus" role="status" aria-live="polite">Preview only · not a live position.</p>
+</div>
+<output aria-label="Latest similarity result" class="latest-result" id="latestTapResult">No brick scored yet</output>
+<div class="actions"><button hidden="" id="inspectionReviewLast" type="button">Review last stop</button><button hidden="" id="inspectionRetrySave" type="button">Retry saving</button></div>
+<details class="secondary-tools"><summary>Single-stop test (optional)</summary>
+<label>Lower for test (in)<input id="autoStepDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label><div class="actions main-actions"><button id="inspectionRun" type="button">Run one test stop</button></div>
+<div class="actions main-actions"></div>
+
+<label>Recording<select id="inspectionTaps"><option value="burst">3 taps at 2 Hz</option><option value="visual">Visual only</option></select></label>
+<p class="hint">This optional test lowers once, captures a photo, then taps. <span hidden="" id="hardwareDistanceNotice">In hardware mode, the pulley encoder measures the descent.</span></p>
+</details>
+</section><details class="control-card operator-panel" id="routePlanner" open="">
+<summary>Route planning</summary>
+<p class="hint">Choose the coverage and spacing, then save the route. Run Route completes every stop automatically.</p>
 <div class="route-inputs">
 <label>Tap location<select id="brickTapZone"><option value="center">Center</option><option value="edge">Edge</option></select></label>
 <label hidden="" id="previewSlipLabel">Simulated Y slip (in)<input id="previewSlip" max="3" min="-3" step="0.1" type="number" value="0"/></label>
 </div>
+<label>Starting side and travel direction<select aria-describedby="routeDirectionHelp" id="routeDirection" required=""><option value="right">Start left → move right</option><option value="left">Start right → move left</option></select></label>
+<p class="hint" id="routeDirectionHelp">Position the pod at the first brick on the chosen starting side before running. The route starts at its current position.</p>
 <label>Vertical coverage<select id="routeCoverage"><option value="count">Number of bricks</option><option value="limit">Down to lowest Y</option></select></label>
 <div class="route-inputs">
 <label id="routeRowsField">Bricks per column<input id="routeRows" min="1" required="" step="1" type="number" value="3"/></label>
@@ -200,44 +302,11 @@ textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var
 <button id="routeUseSample" type="button">Use calculated spacing</button>
 </details>
 <p class="hint">Center the tapper on the first brick. Measure spacing between brick centers, including the mortar joint. The route alternates down and up, and takes a photo and records three taps at each stop.</p>
-<p class="hint" id="setupRouteSummary" role="status"></p></section><details id="connectionDiagnostics"><summary>Connection diagnostics</summary><p class="diagnostic-addresses" id="deviceAddresses"></p><p class="hint" id="packetStatus"></p><div class="actions"><button id="stop">Stop video</button><button id="export">Save connection log</button></div><div class="metrics"><div><span>Received video</span><strong id="rate">—</strong></div><div><span>Frames / sec</span><strong id="fps">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div><div><span>Last frame</span><strong id="age">—</strong></div><div><span>Interruptions</span><strong id="drops">0</strong></div><div><span>Interrupted time</span><strong id="downtime">0 s</strong></div></div><p class="hint" id="route">Private Ethernet connection</p><canvas aria-label="Video availability timeline" id="history"></canvas><div aria-label="Connection event log" id="events"></div></details></div><div aria-label="Manual" class="operator-page" data-page="manual" id="page-manual"><section aria-labelledby="motionTitle" class="control-card">
-<h2 id="motionTitle">Move the robot</h2>
-<div class="motion-row">
-<h3>X · Across <span class="simulation" id="xMode">Checking</span></h3>
-<output aria-label="Current X position" id="xReadout">—</output>
-<label>X step (in)<input id="xDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label>
-<div class="actions"><button disabled="" id="moveLeft" type="button">← Left</button><button disabled="" id="moveRight" type="button">Right →</button><button class="stop-button" disabled="" id="stopX" type="button">Stop X</button></div>
-<p class="hint" id="xMovementStatus" role="status"></p>
-</div>
-<div class="motion-row">
-<h3>Y · Down from roof <span class="simulation" id="yMode">Checking</span></h3>
-<div class="y-reference"><output aria-label="Current Y position" id="yReadout">—</output><button disabled="" id="manualZeroY" type="button">Set Y zero here</button></div>
-<label>Y step (in)<input id="yDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label>
-<div class="actions"><button disabled="" id="moveYUp" type="button">↑ Up</button><button disabled="" id="moveYDown" type="button">↓ Down</button><button class="stop-button" disabled="" hidden="" id="stopY" type="button">Stop Y</button></div>
-<p class="hint" id="yMovementStatus" role="status"></p>
-</div>
-</section><section class="control-card"><h2>Tap and record</h2><div class="actions"><button class="primary" disabled="" id="tapOnce" type="button">Tap once</button><button disabled="" id="tapBurst" type="button">Tap 3 times (2 Hz)</button><button class="primary" id="brickTapHere" type="button">Record 3 taps + photo</button></div><p class="hint">Records three taps at 2 Hz and saves the photo, audio, and score at the current X and Y.</p><p class="feedback" id="stationaryStatus" role="status"></p><p class="hint" id="tapStatus" role="status">Waiting for the robot tap controller…</p></section><section aria-label="Capture and position">
-<div class="form-panel"><h2>Take a photo</h2><p class="hint">Capture the current camera view at the displayed X and Y. Open the saved photo in the brick map below.</p>
-<div class="fields"><label>X position (in)<input id="encoderX" readonly="" type="number"/></label><label>Y position (in)<input id="encoderY" readonly="" type="number"/></label><label class="wide">Brick condition<select id="brickStatus"><option value="unknown">Unclassified</option><option value="good">Good · green</option><option value="bad">Bad · red</option></select></label></div>
-<button class="primary" disabled="" id="photo" type="button">Take photo and save to map</button><div class="feedback" id="photoStatus" role="status"></div>
-<p class="hint" id="positionStatus">Waiting for position…</p>
-</div>
-</section><section class="control-card" id="tapRecordings"><h2>Audio recordings</h2>
-<p class="hint" id="recordingsEmpty">Tap once or record three taps to add a recording. Play it here or download the WAV.</p>
-<p class="hint" id="audioSaveStatus" role="status">Recordings are saved automatically in this browser for this job.</p>
-<ol id="tapClips"></ol>
-<p class="hint">Inspection-route recordings are also available by opening a brick on the map.</p></section><details aria-label="Inspection controls" class="control-card operator-panel"><summary>Short winch jogs</summary><p class="hint"><span class="simulation" id="winchMode">Winch controls</span> <span id="winchHint"></span></p><div class="actions operator-bar"><button disabled="" id="winchStart" type="button">Arm winch</button><button disabled="" id="winchUp" type="button">↑ Up</button><button disabled="" id="winchDown" type="button">↓ Down</button><button class="stop-button" disabled="" id="winchStop" type="button">Stop winch</button></div>
-<details class="secondary-tools"><summary>Relay status</summary><div aria-label="Relay contacts" class="relay-lights"><span class="relay-light" id="relay1">CH1 · Stop</span><span class="relay-light" id="relay2">CH2 · Start</span><span class="relay-light" id="relay3">CH3 · Up</span><span class="relay-light" id="relay4">CH4 · Down</span></div></details><p class="hint" id="winchFeedback" role="status">Waiting for controller…</p>
-</details></div><div aria-label="Automatic inspection" class="operator-page" data-page="automatic" hidden="" id="page-automatic"><section aria-labelledby="inspectionTitle" class="control-card">
-<h2 id="inspectionTitle">Automatic inspection</h2><p aria-live="polite" class="hint" id="routeSummary"></p><div class="actions"><button id="routeRun" type="button">Simulate route</button><a class="recording-shortcut" href="#setup">Edit route in Setup</a></div>
-<output aria-label="Latest similarity result" class="latest-result" id="latestTapResult">No brick scored yet</output>
-<label>Lower per step (in)<input id="autoStepDistance" min="0.1" required="" step="0.1" type="number" value="2"/></label><div class="actions main-actions"><button class="primary" id="inspectionRun" type="button">Run next step</button><button hidden="" id="inspectionReviewLast" type="button">Review last step</button><button hidden="" id="inspectionRetrySave" type="button">Retry saving</button></div>
-<div class="actions main-actions"></div>
-<details class="secondary-tools"><summary>Step options</summary>
-<label>Recording<select id="inspectionTaps"><option value="burst">3 taps at 2 Hz</option><option value="visual">Visual only</option></select></label>
-<p class="hint">Each step lowers, captures a photo, then taps. <span hidden="" id="hardwareDistanceNotice">In hardware mode, the pulley encoder measures the descent.</span></p>
-</details>
-</section><section aria-labelledby="reviewTitle" class="control-card" hidden="" id="inspectionReview">
+<p class="hint" id="setupRouteSummary" role="status"></p>
+
+<details class="secondary-tools"><summary>Starting brick reference</summary>
+<p class="hint">A new hardware route uses the current position as its first brick. Use this control to re-align an existing wall reference after setting Y zero again.</p>
+<div class="actions"><button id="routeReference" type="button">Set first brick here</button></div><p class="hint" id="brickReferenceStatus" role="status"></p></details></details><section aria-labelledby="reviewTitle" class="control-card" hidden="" id="inspectionReview">
 <div class="dialog-head"><h2 id="reviewTitle">Review this cell</h2><button id="reviewClose" type="button">Close</button></div>
 <p class="hint" id="reviewPosition"></p>
 <div class="tap-analysis" hidden="" id="reviewTapAnalysis"></div>
@@ -246,7 +315,7 @@ textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var
 <details class="secondary-tools" id="reviewRecording"><summary>Listen or download WAV</summary><div class="review-audio" id="reviewAudio"></div></details>
 <details class="secondary-tools"><summary>Notes and labels</summary>
 <div class="actions">
-<button id="reviewSimilar" type="button">Similar · green</button><button id="reviewDifferent" type="button">Different · yellow</button>
+<button id="reviewSimilar" type="button">Similar · green</button><button id="reviewDifferent" type="button">Different · red</button>
 <button id="reviewVisual" type="button">Visual only · blue</button><button id="reviewUnknown" type="button">Use automatic result</button>
 </div>
 <label>Notes<textarea id="reviewNotes" maxlength="2000" rows="2"></textarea></label>
@@ -291,6 +360,8 @@ textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var
 <script src="/tap-analysis.js"></script>
 <script src="/player.js"></script>
 <script src="/dashboard.js"></script>
+<script src="/stepper-controls.js"></script>
+<script src="/route-preview.js"></script>
 <script src="/automatic.js"></script>
 <script src="/pages.js"></script>
 <script>
@@ -350,12 +421,13 @@ const zoneLabel=p=>p.tap_zone==='edge'?'Edge':p.tap_zone==='center'?'Center':'Ph
 const coordinateText=p=>{
  const [x,y]=coords(p);
  const unit=hasInches(p)?'in':'counts';
- return `X ${x} ${unit} · Y ${y} ${unit}${p.position_source==='outrigger-timed'?' estimated':''}`;
+ return `X ${x} ${unit}${p.x_estimated?' estimated':''} · Y ${y} ${unit}${p.position_source==='outrigger-timed'?' estimated':''}`;
 };
 function cellResult(p){
+ if(p.status==='review'&&p.classification_source==='tap-review')return {status:'bad',label:'Different'};
  const comparison=p.status==='unknown'&&scoring.result(p);
  if(comparison&&comparison.status!=='unknown')return {status:comparison.status,label:comparison.status==='good'?'Similar':'Dissimilar'};
- return {status:p.status,label:({good:p.classification_source==='tap-review'?'Similar':'Good',bad:'Bad',visual:'Visual only',review:'Different',unknown:'Unclassified'})[p.status]};
+ return {status:p.status,label:({good:p.classification_source==='tap-review'?'Similar':'Good',bad:p.classification_source==='tap-review'?'Different':'Bad',visual:'Visual only',review:'Review',unknown:'Unclassified'})[p.status]};
 }
 function tapScoreLabel(p){
  const comparison=scoring.result(p);
@@ -471,9 +543,9 @@ async function load(){
   photos=saved;render();renderSelectedTitle();el('mapState').textContent='';
   let updatedAny=false;
   for(const photo of saved){
-   if(photo.tap_analysis||!photo.tap_burst||!photo.tap_audio?.length||checkedBursts.has(photo.id))continue;
+   if(scoring.validAnalysis(photo.tap_analysis)||!photo.tap_burst||!photo.tap_audio?.length||checkedBursts.has(photo.id))continue;
    checkedBursts.add(photo.id);
-   const analysis=scoring.calculate(photo.tap_audio[0]);
+   const analysis=scoring.calculate(photo.tap_audio[0],photo.tap_analysis);
    if(!analysis)continue;
    const updated=await window.brickStorage.updateTapAnalysis(photo.id,analysis,{ifMissing:true});
    if(version!==loadVersion)continue;
@@ -552,6 +624,7 @@ el('markGood').onclick=()=>mark('good');el('markBad').onclick=()=>mark('bad');el
 el('mapTab').onclick=()=>{galleryMode=false;render();};el('galleryTab').onclick=()=>{galleryMode=true;render();};
 function positionDetails(p){
  if(!hasInches(p))return p.position_source==='manual'?'Manual encoder counts':'Earlier sample encoder counts';
+ if(p.position_source==='outrigger-stepper-x-pulley-y')return `X commanded steps (estimated) · Y pulley encoder ${p.y} counts`;
  if(p.position_source==='outrigger-timed')return 'X encoder · Y estimated from winch time';
  if(p.position_source==='outrigger-encoders')return `Encoder counts X ${p.x} · Y ${p.y} · roof zero set`;
  const xSource=p.position_source==='x-encoder-rooftop'?'X encoder':'X simulated';

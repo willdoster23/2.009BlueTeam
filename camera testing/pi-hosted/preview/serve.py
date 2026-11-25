@@ -6,6 +6,7 @@ from http.server import ThreadingHTTPServer
 import io
 import json
 import math
+import os
 from pathlib import Path
 import signal
 import sys
@@ -26,7 +27,7 @@ from server import Handler
 from winch import FOUR_CHANNEL_PINS, WinchRelays
 from x_axis import MM_PER_COUNT
 
-ADDRESS = ('127.0.0.1', 8765)
+ADDRESS = ('127.0.0.1', int(os.environ.get('BRICK_PREVIEW_PORT', '8765')))
 HOST = f'{ADDRESS[0]}:{ADDRESS[1]}'
 X_COUNTS_PER_SECOND = 3 * 25.4 / MM_PER_COUNT
 Y_COUNTS_PER_SECOND = 3 * PULLEY_COUNTS / math.tau
@@ -123,6 +124,75 @@ class PreviewEncoders:
             return True
 
 
+class PreviewStepperEncoders(PreviewEncoders):
+    """Simulated command counts plus an independent pulley; never opens USB."""
+    def __init__(self):
+        super().__init__()
+        self.motors = {role: dict(sequence=0, generation=1, steps=0, remaining=0, rate=0,
+                                 moving=False, armed=False, reason='idle', alarmRaw=1,
+                                 placeRaw=1, alarmMode=0, moveId=0) for role in ('X','Y')}
+        self.motor_moves = {}
+        self.motor_updated = time.monotonic()
+
+    def _advance_motors(self):
+        now = time.monotonic()
+        for role, motor in self.motors.items():
+            job = self.motor_moves.get(role)
+            if job:
+                count = min(job['distance'], int((min(now, job['expires']) - job['began']) * job['rate']))
+                position = job['start'] + count * job['direction']
+                if role == 'Y':
+                    self.y_count += (position - motor['steps']) / 1600 * 2 * PULLEY_COUNTS
+                motor['steps'], motor['remaining'] = position, job['distance'] - count
+                if count == job['distance'] or now >= job['expires']:
+                    motor['moving'], motor['rate'] = False, 0
+                    motor['reason'] = 'done' if count == job['distance'] else 'link_lost'
+                    self.motor_moves.pop(role, None)
+            motor['sequence'] += 1
+            motor['received'] = now
+        self.motor_updated = now
+
+    def reading(self, role):
+        with self.lock:
+            self._advance_motors()
+        return super().reading(role)
+
+    def motor_reading(self, role='Y'):
+        with self.lock:
+            self._advance_motors()
+            return dict(self.motors[role])
+
+    def start_motor(self, generation, move_id, steps, rate, acceleration, role='Y'):
+        with self.lock:
+            self._advance_motors()
+            motor = self.motors[role]
+            if any(motor['moving'] for motor in self.motors.values()) or generation != 1:
+                return False
+            self.motor_moves[role] = dict(start=motor['steps'], distance=abs(steps), direction=1 if steps>0 else -1,
+                                         rate=rate/1000, began=time.monotonic(), expires=time.monotonic()+MOTION_LEASE)
+            motor.update(moving=True, armed=True, reason='moving', remaining=abs(steps), rate=rate/1000, moveId=move_id)
+            return True
+
+    def renew_motor(self, role='Y'):
+        with self.lock:
+            if role not in self.motor_moves:
+                return False
+            self.motor_moves[role]['expires'] = time.monotonic()+MOTION_LEASE
+            return True
+
+    def stop_motor(self, role='Y'):
+        with self.lock:
+            self._advance_motors()
+            self.motor_moves.pop(role, None)
+            self.motors[role].update(moving=False, armed=False, remaining=0, rate=0, reason='stopped')
+            return True
+
+    def motor_alarm(self, mode, role='Y'):
+        with self.lock:
+            self.motors[role]['alarmMode'] = mode
+            return True
+
+
 class PreviewTap:
     """Play back deterministic sample recordings through the normal review and scoring UI."""
 
@@ -187,7 +257,7 @@ class PreviewTap:
 
 
 class PreviewControls:
-    def __init__(self):
+    def __init__(self, steppers=False):
         self.state_dir = TemporaryDirectory(prefix='brick-mapper-preview-')
         pulley_config = Path(self.state_dir.name, 'pulley.json')
         pulley_config.write_text(json.dumps({'inchesPerTurn': math.tau, 'holdToRun': True}))
@@ -197,7 +267,20 @@ class PreviewControls:
         self.roof.winch = WinchRelays(FOUR_CHANNEL_PINS, output_factory=boards.output)
         self.roof.pulley = PulleyAxis(boards, self.roof.winch, self.roof.lock,
                                      self.roof.arm_winch, self.roof.disarm_winch, pulley_config)
-        self.roof.pulley.command({'action': 'zero', 'id': 'preview-start'})
+        if steppers:
+            from stepper import StepperAxis
+            boards = PreviewStepperEncoders()
+            self.roof.winch.close()
+            self.roof.winch = None
+            self.roof.winch_mode = 'steppers'
+            self.roof.axis = StepperAxis(boards, self.roof.lock, 'X', pulley_config.with_name('x-reference.json'))
+            self.roof.pulley = StepperAxis(boards, self.roof.lock, 'Y', pulley_config)
+            for axis in (self.roof.axis, self.roof.pulley):
+                axis.command({'action':'stepper-settings', 'id':'preview-settings',
+                              'settings':{**axis.profile, 'calibrated':True}})
+                axis.command({'action':'zero', 'id':'preview-zero'})
+        else:
+            self.roof.pulley.command({'action': 'zero', 'id': 'preview-start'})
         self.roof.exchange['connected'] = True
         self.roof.poweroff_available = False
         self.preview_tap = PreviewTap()
@@ -238,18 +321,22 @@ class PreviewControls:
     def poweroff(self):
         return 503, {'error': 'Shutdown is unavailable in the preview.'}
 
+    def led(self, _payload):
+        return 503, {'error': 'The physical LED is unavailable in the preview.'}
+
     def close(self):
         self.preview_tap.close()
         with self.roof.lock:
             self.roof.pulley.stop()
             self.roof.axis.close()
-            self.roof.winch.close()
+            if self.roof.winch:
+                self.roof.winch.close()
             self.state_dir.cleanup()
 
 
 class PreviewHandler(Handler):
     preview = True
-    controls = PreviewControls()
+    controls = PreviewControls(steppers=os.environ.get('BRICK_PREVIEW_STEPPERS') == '1')
 
     def allowed_host(self):
         return self.headers.get('Host') == HOST
@@ -260,6 +347,8 @@ class PreviewHandler(Handler):
 
 if __name__ == '__main__':
     signal.signal(signal.SIGTERM, stop_service)
+    # Leave room for parallel scripts, media and status requests on page reload.
+    ThreadingHTTPServer.request_queue_size = 64
     try:
         with ThreadingHTTPServer(ADDRESS, PreviewHandler) as server:
             print(f'Brick Mapper preview http://{HOST}/', flush=True)

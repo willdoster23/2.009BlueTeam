@@ -1,0 +1,6 @@
+#!/bin/bash
+# Terminal gives framework Python/Tk the standard macOS launch environment.
+# All recording controls and Pico selection are in the graphical window.
+set -e
+adxl_root="$(cd "$(dirname "$0")/../../.." && pwd)"
+exec /usr/bin/open -a Terminal "$adxl_root/Run Test.command"

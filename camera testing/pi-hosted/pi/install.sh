@@ -40,7 +40,7 @@ install -d -m 755 /opt/blueteam-network
 install -m 644 "$BLUE_SOURCE/agent.py" /opt/blueteam-network/agent.py
 if [[ -n "$BLUE_WINCH_OPTION" ]]; then
     /usr/bin/python3 -c 'import gpiozero'
-    install -m 644 "$BLUE_SOURCE"/{winch.py,x_axis.py,outrigger.py} /opt/blueteam-network/
+    install -m 644 "$BLUE_SOURCE"/{winch.py,x_axis.py,outrigger.py,stepper.py} /opt/blueteam-network/
 fi
 install -o root -g "$BLUE_GROUP" -m 640 "$BLUE_SOURCE/network.key" /opt/blueteam-network/network.key
 cat > /etc/systemd/system/blueteam-network.service <<EOF

@@ -1,8 +1,10 @@
 'use strict';
 (() => {
   const rate = 48000;
-  const fftSize = 1024;
+  const algorithm = 'fft21600-pre50ms-v2';
+  const fftSize = 21600;
   const bands = 64;
+  const beforeImpact = 0.05;
   const afterImpact = 0.45;
 
   function decodeWav(bytes) {
@@ -26,8 +28,8 @@
       if (tag === 0x64617461) data = {start, length};
       chunk = start + length + (length % 2);
     }
-    if (!format || !data || format.rate !== rate || format.channels !== 1) {
-      throw new Error('Use a mono WAV recorded at 48 kHz.');
+    if (!format || !data || format.rate !== rate || format.channels < 1) {
+      throw new Error('Use a WAV recorded at 48 kHz.');
     }
     const {bits, encoding, bytesPerFrame} = format;
     const pcm = {
@@ -38,13 +40,18 @@
     };
     const floats = {32: offset => view.getFloat32(offset, true), 64: offset => view.getFloat64(offset, true)};
     const read = encoding === 1 ? pcm[bits] : encoding === 3 ? floats[bits] : null;
-    if (!read || bytesPerFrame !== bits / 8 || !data.length || data.length % bytesPerFrame) {
+    const bytesPerSample = bits / 8;
+    if (!read || bytesPerFrame !== bytesPerSample * format.channels || !data.length || data.length % bytesPerFrame) {
       throw new Error('Use an uncompressed PCM or floating-point WAV.');
     }
     return Float64Array.from({length: data.length / bytesPerFrame}, (_, frame) => {
-      const sample = read(data.start + frame * bytesPerFrame);
-      if (!Number.isFinite(sample)) throw new Error('The WAV contains invalid samples.');
-      return sample;
+      let sum = 0;
+      for (let channel = 0; channel < format.channels; channel++) {
+        const sample = read(data.start + frame * bytesPerFrame + channel * bytesPerSample);
+        if (!Number.isFinite(sample)) throw new Error('The WAV contains invalid samples.');
+        sum += sample;
+      }
+      return sum / format.channels;
     });
   }
 
@@ -134,30 +141,28 @@
     return {times, source: 'scheduled'};
   }
 
-  function fftMagnitude(samples, start, end) {
-    const n = end - start;
-    let mean = 0;
-    for (let i = start; i < end; i++) mean += samples[i];
-    mean /= n;
-    const real = new Float64Array(fftSize), imag = new Float64Array(fftSize);
-    // The Python script computes the Hann on the whole slice, then NumPy crops or pads to n=1024.
-    for (let i = 0, reversed = 0; i < fftSize; i++) {
-      if (i < n) {
-        const hann = n === 1 ? 1 : (1 - Math.cos(2 * Math.PI * i / (n - 1))) / 2;
-        real[reversed] = (samples[start + i] - mean) * hann;
-      }
-      let bit = fftSize / 2;
-      while (bit && (reversed & bit)) {
-        reversed ^= bit;
-        bit >>= 1;
-      }
+  // Bluestein computes the exact 21,600-point DFT using a power-of-two
+  // convolution. Its internal padding does not change the supplied FFT length.
+  const convolutionSize = 2 ** Math.ceil(Math.log2(2 * fftSize - 1));
+  const cosines = Float64Array.from({length: convolutionSize / 2}, (_, i) => Math.cos(2 * Math.PI * i / convolutionSize));
+  const sines = Float64Array.from({length: convolutionSize / 2}, (_, i) => Math.sin(2 * Math.PI * i / convolutionSize));
+
+  function transform(real, imag, inverse = false) {
+    const size = real.length;
+    for (let i = 1, reversed = 0; i < size; i++) {
+      let bit = size / 2;
+      while (reversed & bit) { reversed ^= bit; bit >>= 1; }
       reversed ^= bit;
+      if (i < reversed) {
+        [real[i], real[reversed]] = [real[reversed], real[i]];
+        [imag[i], imag[reversed]] = [imag[reversed], imag[i]];
+      }
     }
-    for (let width = 2; width <= fftSize; width *= 2) {
+    for (let width = 2; width <= size; width *= 2) {
+      const stride = size / width;
       for (let i = 0; i < width / 2; i++) {
-        const angle = -2 * Math.PI * i / width;
-        const cos = Math.cos(angle), sin = Math.sin(angle);
-        for (let left = i; left < fftSize; left += width) {
+        const cos = cosines[i * stride], sin = (inverse ? 1 : -1) * sines[i * stride];
+        for (let left = i; left < size; left += width) {
           const right = left + width / 2;
           const r = real[right] * cos - imag[right] * sin;
           const j = real[right] * sin + imag[right] * cos;
@@ -168,7 +173,47 @@
         }
       }
     }
-    return real.subarray(0, fftSize / 2 + 1).map((value, i) => Math.hypot(value, imag[i]));
+    if (inverse) {
+      for (let i = 0; i < size; i++) { real[i] /= size; imag[i] /= size; }
+    }
+  }
+
+  const chirpCos = new Float64Array(fftSize), chirpSin = new Float64Array(fftSize);
+  const kernelReal = new Float64Array(convolutionSize), kernelImag = new Float64Array(convolutionSize);
+  for (let i = 0; i < fftSize; i++) {
+    const angle = Math.PI * ((i * i) % (2 * fftSize)) / fftSize;
+    chirpCos[i] = kernelReal[i] = Math.cos(angle);
+    chirpSin[i] = kernelImag[i] = Math.sin(angle);
+    if (i) {
+      kernelReal[convolutionSize - i] = chirpCos[i];
+      kernelImag[convolutionSize - i] = chirpSin[i];
+    }
+  }
+  transform(kernelReal, kernelImag);
+
+  function fftMagnitude(samples, start, end) {
+    const n = end - start;
+    let mean = 0;
+    for (let i = start; i < end; i++) mean += samples[i];
+    mean /= n;
+    const real = new Float64Array(convolutionSize), imag = new Float64Array(convolutionSize);
+    // Match SciPy's full-slice Hann before NumPy truncates or pads to n=21600.
+    for (let i = 0; i < Math.min(n, fftSize); i++) {
+      const hann = n === 1 ? 1 : (1 - Math.cos(2 * Math.PI * i / (n - 1))) / 2;
+      const sample = (samples[start + i] - mean) * hann;
+      real[i] = sample * chirpCos[i];
+      imag[i] = -sample * chirpSin[i];
+    }
+    transform(real, imag);
+    for (let i = 0; i < convolutionSize; i++) {
+      const r = real[i] * kernelReal[i] - imag[i] * kernelImag[i];
+      imag[i] = real[i] * kernelImag[i] + imag[i] * kernelReal[i];
+      real[i] = r;
+    }
+    transform(real, imag, true);
+    return Float64Array.from({length: fftSize / 2 + 1}, (_, i) => Math.hypot(
+      real[i] * chirpCos[i] + imag[i] * chirpSin[i],
+      imag[i] * chirpCos[i] - real[i] * chirpSin[i]));
   }
 
   function melFilters() {
@@ -193,7 +238,7 @@
     if (!validTimes(times, samples.length)) throw new Error('Enter three increasing impact times within the WAV.');
     const average = new Float64Array(fftSize / 2 + 1);
     for (const time of times) {
-      const start = Math.trunc(time * rate);
+      const start = Math.max(0, Math.trunc((time - beforeImpact) * rate));
       const end = Math.min(Math.trunc((time + afterImpact) * rate), samples.length);
       const fft = fftMagnitude(samples, start, end);
       for (let bin = 0; bin < fft.length; bin++) average[bin] += fft[bin];
@@ -211,5 +256,5 @@
     return baseline.reduce((sum, value, i) => sum + Math.abs(value - current[i]), 0) / bands;
   }
 
-  window.brickTapScore = {decodeWav, samplesFromBase64, validTimes, readTimes, impactCsv, detectTimes, burstTimes, spectrum, compare};
+  window.brickTapScore = {algorithm, decodeWav, samplesFromBase64, validTimes, readTimes, impactCsv, detectTimes, burstTimes, spectrum, compare};
 })();

@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-23",
+  "python_tests": {
+    "passed": 32,
+    "failed": 0
+  },
+  "capture_core_tests": "passed",
+  "python_syntax": "passed",
+  "launcher_shell_syntax": "passed",
+  "gui_visual_check": "Application launches; Pico selector, recording period, graphs and export controls visible.",
+  "session_export_software_check": "CSV sample retention, tap numbering, PNG generation and simulation labeling verified by tests.",
+  "native_export_dialog_end_to_end": "Not completed; finalized at user request without further UI polish.",
+  "physical_sensor_tested": false,
+  "firmware_uploaded": false,
+  "solenoid_operated": false,
+  "main_brickmapper_modified_for_this_update": false,
+  "uf2_sha256": "9e92b69ff013325135ae25d2ee7b3c65d3a2fc9f45393a38d440ab3a748072d8",
+  "update": "Only captures with peak absolute inertial-force estimate >= 3 N count as taps. Weak windows are omitted from count, graphs and tap CSV, and do not start the settling pause. Accepted taps retain the default 2-second pause.",
+  "settling_pause_tests": "Re-arm spacing, recording deadline, cancellation during pause and saved pause metadata passed.",
+  "user_feedback": "User reports the main impulse looks correct, but two physical taps produced 18 capture windows; settling pause added to reduce repeat triggers.",
+  "waveform_processing_change": "No filtering or waveform changes; peak force magnitude only determines whether a complete capture is accepted.",
+  "force_minimum_tests": "3 N boundary, positive and negative direction, configured moving mass, weak-trigger re-arm, accepted raw preservation, exported CSV and ignored-count metadata passed.",
+  "mounting_context": "User reports zip-tie/tape mounting is not rigid. Motion of the sensor board can add apparent peaks; the cutoff does not correct mounting artifacts."
+}

@@ -7,7 +7,7 @@ test "$(id -u)" = 0
 test -x /usr/bin/ffmpeg
 test -s "$source_dir/network.key"
 install -d -m 755 /opt/blueteam-network /etc/mediamtx
-install -m 644 "$source_dir"/{agent.py,camera.py,tap.py,tap_audio.py} /opt/blueteam-network/
+install -m 644 "$source_dir"/{agent.py,camera.py,tap.py,tap_audio.py,led.py} /opt/blueteam-network/
 install -o root -g "$group" -m 640 "$source_dir/network.key" /opt/blueteam-network/network.key
 install -m 755 "$source_dir/mediamtx" /usr/local/bin/mediamtx
 
@@ -79,6 +79,8 @@ StartLimitIntervalSec=0
 [Service]
 User=$username
 Group=$group
+RuntimeDirectory=blueteam-network
+WorkingDirectory=/run/blueteam-network
 ExecStartPre=+/usr/bin/python3 /opt/blueteam-network/tap.py setup $username
 ExecStart=/usr/bin/python3 /opt/blueteam-network/agent.py --role robot --tap --token-file /opt/blueteam-network/network.key
 ExecStopPost=+/usr/bin/python3 /opt/blueteam-network/tap.py reset

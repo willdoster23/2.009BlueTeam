@@ -1,0 +1,44 @@
+{
+  "fqbn": "arduino:megaavr:nona4809:mode=off",
+  "layout": "separate-motor-nanos",
+  "pins": {
+    "X": {
+      "step": 9,
+      "dir": 8
+    },
+    "Y": {
+      "step": 9,
+      "dir": 8,
+      "alarm": 2,
+      "place": 3
+    }
+  },
+  "motorReportHz": 20,
+  "pulseTimerHz": 20000,
+  "pulseWidthUs": 100,
+  "fixedSpeedTest": true,
+  "maxPulsesPerSecond": {
+    "X": 5000,
+    "Y": 6000
+  },
+  "yMotorRpmCap": 200,
+  "protectedEncoderSerial": "73F97AA75154524C4A202020FF0C3720",
+  "sourceSha256": {
+    "brickmapper_stepper.ino": "ae38b32d1cd5683706b819d0df370cb61720c1b6cff41172609d4e83c49423fa",
+    "motion_core.h": "b9f5703ab0f75e3bfd838977cd061a4e668951e45a206a25c47db8e426d383e4"
+  },
+  "axes": {
+    "X": {
+      "file": "X.hex",
+      "sha256": "c12302cb7d67a861516b0e8a04fecf8defdf255959548013cbb88df6b1f2b713",
+      "usbSerial": "D92DB2CC515452344D202020FF094441",
+      "identity": "SBH1 BRICKMAPPER_STEPPER X 1 "
+    },
+    "Y": {
+      "file": "Y.hex",
+      "sha256": "73935e75f000025f9d68bcf8ee75f8f030de8a6a0f7e079faa2b4e6222cf6117",
+      "usbSerial": "498847005154524C4A202020FF0E4352",
+      "identity": "SBH1 BRICKMAPPER_STEPPER Y 1 "
+    }
+  }
+}

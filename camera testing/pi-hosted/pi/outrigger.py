@@ -19,6 +19,9 @@ PULLEY_COUNTS = 4096
 # Ignore small reverse readings; stop at a quarter turn opposite the move start.
 Y_REVERSE_LIMIT_COUNTS = PULLEY_COUNTS // 4
 Y_TARGET_TOLERANCE_INCHES = 0.5
+Y_MIN_PROGRESS_INCHES = 0.02
+Y_QUIET_SECONDS = 0.15
+Y_EXTRA_SETTLE_SECONDS = 2.0
 Y_MAX_JOG_INCHES = 12
 MOTION_LEASE = 2.0
 FRESH_SECONDS = 0.35
@@ -74,15 +77,24 @@ class PulseResponse:
         self.rate = None
         self.last_ms = None
         self.progress = False
+        self.reason = None
 
     def duration(self, inches):
         p = self.profile
         if self.last_ms is None:
             duration = p.probe_ms
+            self.reason = 'first pulse'
+        elif not self.progress:
+            # A shorter retry may fall below the handset's minimum useful
+            # press. Repeat once, without increasing a pulse lacking feedback.
+            duration = self.last_ms
+            self.reason = 'same-pulse retry'
         elif self.rate is None:
             duration = inches * p.fallback_ms_per_inch
+            self.reason = 'correction'
         else:
             duration = inches * p.fraction / self.rate
+            self.reason = 'correction'
         if self.last_ms is not None:
             # No feedback must never turn into a larger blind retry.
             duration = min(duration, self.last_ms * (p.growth if self.progress else 1))
@@ -99,6 +111,21 @@ class PulseResponse:
         # Respond immediately to faster travel. A slow or slipping sample only
         # lowers the estimate gradually, so it cannot provoke a large pulse.
         self.rate = measured if self.rate is None else max(measured, self.rate * 0.85)
+
+
+class PulseSettling:
+    """Require both the configured wait and a short quiet encoder window."""
+    def __init__(self, count, now, wait, threshold):
+        self.anchor = count
+        self.changed_at = now
+        self.earliest = now + wait
+        self.deadline = self.earliest + Y_EXTRA_SETTLE_SECONDS
+        self.threshold = threshold
+
+    def ready(self, count, received):
+        if abs(count - self.anchor) >= self.threshold:
+            self.anchor, self.changed_at = count, received
+        return received >= self.earliest and received - self.changed_at >= Y_QUIET_SECONDS
 
 
 @dataclass(frozen=True)
@@ -119,6 +146,12 @@ class Port:
     buffer: bytearray = field(default_factory=bytearray)
     discard: bool = False
     reading: Reading | None = None
+    motor: dict | None = None
+    motor_identity: bool = False
+    motor_role: str | None = None
+    motor_capacity: int = 5000
+    fixed_speed: bool = False
+    next_hello: float = 0
 
 
 class SerialBoards:
@@ -129,6 +162,8 @@ class SerialBoards:
         self.ports = {}
         self.generation = 0
         self.x_move = None
+        self.motor_moves = {}
+        self.next_motor_ping = {}
         self.next_ping = 0
         self.finished = threading.Event()
         self.worker = threading.Thread(target=self._work, daemon=True)
@@ -155,6 +190,54 @@ class SerialBoards:
         return Port(fd, self.generation)
 
     def _receive(self, port, raw, now):
+        if raw.startswith(b'SBC FIXED=1 PULSE_US=100'):
+            port.fixed_speed = True
+            return
+        if raw.startswith(b'SBH1 WINCH_NANO_EVERY_BENCH 1 STEP=9 DIR=8 '):
+            port.motor_identity, port.motor_role = True, 'Y'
+            port.motor_capacity = 5000
+            return
+        if raw.startswith(b'SBH1 BRICKMAPPER_STEPPER '):
+            fields = raw.decode('ascii', errors='replace').split()
+            if len(fields) >= 6 and fields[2] in ('X', 'Y') and fields[3:6] == ['1', 'STEP=9', 'DIR=8']:
+                if port.motor_role and port.motor_role != fields[2]:
+                    self.generation += 1
+                    port.generation = self.generation
+                    port.motor = None
+                port.motor_identity, port.motor_role = True, fields[2]
+                port.motor_capacity = 6000 if fields[2] == 'Y' else 5000
+            return
+        if raw.startswith(b'SB1 '):
+            try:
+                fields = raw.decode('ascii').split()
+                role = fields.pop(1) if len(fields) == 13 and fields[1] in ('X', 'Y') else 'Y'
+                if port.motor_role and port.motor_role != role:
+                    return
+                if len(fields) != 12:
+                    return
+                seq, armed, moving, steps, remaining, rate, alarm, place, mode, move_id = (
+                    int(fields[i]) for i in (1, 2, 3, 4, 5, 6, 8, 9, 10, 11))
+                if (any(v not in (0, 1) for v in (armed, moving, alarm, place)) or
+                        mode not in (0, 1, 2) or not 0 <= seq < 2**32 or
+                        not -(2**31) <= steps < 2**31 or not 0 <= remaining < 2**31 or
+                        not 0 <= rate <= (6_000_000 if role == 'Y' else 5_000_000) or not 0 <= move_id < 2**31 or
+                        fields[7] not in {'idle', 'moving', 'done', 'stopped', 'link_lost', 'alarm'}):
+                    return
+            except (ValueError, UnicodeError):
+                return
+            port.motor_role = role
+            previous = port.motor
+            if previous and seq < previous['sequence']:
+                self.generation += 1
+                port.generation = self.generation
+                port.motor_identity = False
+            port.motor = dict(sequence=seq, armed=bool(armed), moving=bool(moving), steps=steps,
+                              remaining=remaining, rate=rate / 1000, reason=fields[7], alarmRaw=alarm,
+                              placeRaw=place, alarmMode=mode, moveId=move_id, received=now)
+            if not port.motor_identity and now >= port.next_hello:
+                self._write(port, b'HELLO\n')
+                port.next_hello = now + .5
+            return
         try:
             version, role, sequence, count, state, tag = raw.decode('ascii').split()
             if version != 'BM1' or role not in ('X', 'Y'):
@@ -203,6 +286,62 @@ class SerialBoards:
         with self.lock:
             port = self._port(role)
             return port.reading if port else None
+
+    def _motor_port(self, role='Y'):
+        found = [p for p in self.ports.values() if p.motor_identity and p.motor_role == role and p.motor and
+                 time.monotonic() - p.motor['received'] < .6]
+        return found[0] if len(found) == 1 else None
+
+    def motor_reading(self, role='Y'):
+        with self.lock:
+            port = self._motor_port(role)
+            return dict(port.motor, generation=port.generation,
+                        fixedSpeedSupported=port.fixed_speed,
+                        maxPulsesPerSecond=port.motor_capacity) if port else None
+
+    def start_motor(self, generation, move_id, steps, rate, acceleration, role='Y'):
+        with self.lock:
+            port = self._motor_port(role)
+            if (not port or port.generation != generation or port.motor['moving'] or
+                    not 1000 <= rate <= port.motor_capacity * 1000 or
+                    (acceleration == 0 and not port.fixed_speed) or
+                    move_id <= port.motor['moveId']):
+                return False
+            # Two separate boards cannot interlock each other in firmware. Reserve
+            # the active axis under this transport lock before another can start.
+            for other in ('X', 'Y'):
+                if other != role:
+                    other_port = self._motor_port(other)
+                    if other in self.motor_moves or (other_port and other_port.motor['moving']):
+                        return False
+            packet = f'PING\nARM\nMOVE {move_id} {steps} {rate} {acceleration}\n'.encode('ascii')
+            if not self._write(port, packet):
+                self._write(port, b'STOP\n')
+                return False
+            self.motor_moves[role] = (port, generation, time.monotonic() + MOTION_LEASE)
+            return True
+
+    def renew_motor(self, role='Y'):
+        with self.lock:
+            if role not in self.motor_moves:
+                return False
+            port, generation, expires = self.motor_moves[role]
+            if port is not self._motor_port(role) or port.generation != generation or time.monotonic() >= expires:
+                return False
+            self.motor_moves[role] = (port, generation, time.monotonic() + MOTION_LEASE)
+            return True
+
+    def stop_motor(self, role='Y'):
+        with self.lock:
+            move = self.motor_moves.pop(role, None)
+            port = move[0] if move else self._motor_port(role)
+            return bool(port and any(p is port for p in self.ports.values()) and self._write(port, b'STOP\n'))
+
+    def motor_alarm(self, mode, role='Y'):
+        with self.lock:
+            port = self._motor_port(role)
+            return bool(port and not port.motor['moving'] and not port.motor['armed'] and
+                        self._write(port, f'ALARM {mode}\n'.encode('ascii')))
 
     @staticmethod
     def _write(port, packet):
@@ -268,9 +407,19 @@ class SerialBoards:
                     elif now >= self.next_ping:
                         self._write(port, b'PING\n')
                         self.next_ping = now + 0.1
+                for role, (port, generation, until) in list(self.motor_moves.items()):
+                    if now >= until or port is not self._motor_port(role) or generation != port.generation:
+                        if any(p is port for p in self.ports.values()) and generation == port.generation:
+                            self._write(port, b'STOP\n')
+                        self.motor_moves.pop(role, None)
+                    elif now >= self.next_motor_ping.get(role, 0):
+                        self._write(port, b'PING\n')
+                        self.next_motor_ping[role] = now + .1
 
     def close(self):
         self.stop_x()
+        self.stop_motor('X')
+        self.stop_motor('Y')
         self.finished.set()
         self.worker.join()
         for port in self.ports.values():
@@ -293,9 +442,17 @@ class NanoAxis:
         self.last_id = None
         self.outcome = None
         self.message = 'Waiting for the Nano Every.'
+        self.zero_counts = 0
+        self.zero_generation = None
+        self.coordinate_epoch = secrets.token_hex(8)
 
     def snapshot(self):
         reading = self.boards.reading('X')
+        if reading and self.zero_generation != reading.generation:
+            if self.zero_generation is not None:
+                self.zero_counts = 0
+                self.coordinate_epoch = secrets.token_hex(8)
+            self.zero_generation = reading.generation
         if self.active:
             token, generation, sent = self.active
             if not reading or reading.generation != generation:
@@ -308,10 +465,11 @@ class NanoAxis:
                              message.get(reading.state, 'X move stopped.'))
             elif reading.tag != token and time.monotonic() - sent > 0.5:
                 self._finish('error', 'Nano did not acknowledge the X move.')
-        counts = reading.counts * X_RIGHT_ENCODER_SIGN if reading else None
+        counts = reading.counts * X_RIGHT_ENCODER_SIGN - self.zero_counts if reading else None
         return {'mode': 'live', 'ready': reading is not None, 'connected': reading is not None,
                 'moving': self.active is not None or bool(reading and reading.state == 'moving'),
                 'counts': counts, 'inches': counts * MM_PER_COUNT / 25.4 if counts is not None else None,
+                'zeroInches': self.zero_counts * MM_PER_COUNT / 25.4, 'coordinateEpoch': self.coordinate_epoch,
                 'moveId': self.last_id, 'outcome': self.outcome, 'maxJogInches': MAX_JOG_INCHES,
                 'message': (self.message if self.last_id else 'Nano Every connected.')
                 if reading else 'Connect the Nano Every over USB.'}
@@ -341,6 +499,16 @@ class NanoAxis:
             if self.active and command_id == self.last_id:
                 self.boards.renew_x()
             return 200, state
+        if action == 'zero':
+            if payload.get('mode') != 'live' or command_id in self.handled or state['moving']:
+                return 409, {'error': 'Wait for X to stop before setting zero.'}
+            reading = self.boards.reading('X')
+            if not reading or reading.state == 'moving':
+                return 503, {'error': 'Connect the Nano Every before setting X zero.'}
+            self.zero_counts = reading.counts * X_RIGHT_ENCODER_SIGN
+            self.handled.append(command_id)
+            self.last_id, self.outcome, self.message = command_id, 'done', 'X zero set at this position.'
+            return 200, self.snapshot()
         if action not in ('left', 'right') or not valid_distance(payload.get('inches'), MAX_JOG_INCHES):
             return 400, {'error': 'Choose an X move from 0.1 to 6 inches.'}
         if payload.get('mode') != 'live' or command_id in self.handled or state['moving']:
@@ -479,9 +647,10 @@ class PulleyAxis:
 
     def snapshot(self):
         reading = self._sample()
+        transport = self.boards.reading('Y') if not self.timed else None
         counts = self._counts(reading)
         if not reading:
-            hint = 'Connect the Pico 2 and check for a valid pulley PWM signal.'
+            hint = self._encoder_hint(transport)
         elif self.origin is None:
             hint = 'Set Y zero at the roof before moving by distance.'
         else:
@@ -490,13 +659,15 @@ class PulleyAxis:
         if self.timed:
             hint = f'Estimated Y from relay time at {self.timed_speed:g} in/s. Check the camera before tapping.'
         return {'mode': 'live', 'connected': reading is not None,
+                'encoderUsbConnected': transport is not None,
+                'encoderSignalValid': transport is not None and transport.state == 'idle',
                 'estimated': self.timed, 'timedSpeed': self.timed_speed,
                 'ready': measured, 'downReady': measured, 'upReady': measured,
                 'zeroed': self.origin is not None, 'moving': self.active is not None,
                 'rawCounts': reading.counts if reading else None, 'counts': counts,
-                'encoderSequence': reading.sequence if reading else None,
-                'encoderEpoch': reading.tag if reading else None,
-                'encoderAgeMs': round((time.monotonic() - reading.received) * 1000, 1) if reading else None,
+                'encoderSequence': transport.sequence if transport else None,
+                'encoderEpoch': transport.tag if transport else None,
+                'encoderAgeMs': round((time.monotonic() - transport.received) * 1000, 1) if transport else None,
                 'inches': counts * self.travel / PULLEY_COUNTS if counts is not None else None,
                 'moveId': self.last_id, 'outcome': self.outcome, 'message': hint, 'warning': self.warning,
                 'pulseControl': dict(self.pulse_control) if self.pulse_control else None,
@@ -505,6 +676,12 @@ class PulleyAxis:
                 'holdToRun': self.hold_down and self.hold_up,
                 'holdToRunDown': self.hold_down, 'holdToRunUp': self.hold_up,
                 'maxJogInches': Y_MAX_JOG_INCHES, 'routeLimitSupported': True}
+
+    @staticmethod
+    def _encoder_hint(transport):
+        if transport is not None:
+            return 'Y encoder board connected; no valid PWM signal. Check encoder power, ground and signal input.'
+        return 'Y encoder board not reporting. Connect the Y encoder board by USB.'
 
     def _save_calibration(self, payload):
         travel, sign, down, up = self._calibration(payload)
@@ -575,7 +752,7 @@ class PulleyAxis:
             return 200, self.snapshot()
         reading = self._sample()
         if not reading:
-            return 503, {'error': 'Connect the Pico 2 and check its pulley signal.'}
+            return 503, {'error': self._encoder_hint(self.boards.reading('Y'))}
         if action == 'zero':
             try:
                 scratch = self.origin_file.with_suffix('.tmp')
@@ -630,7 +807,8 @@ class PulleyAxis:
         self.last_id, self.outcome, self.message = command_id, 'moving', f'Moving Y {action}.'
         self.warning = None
         self.pulse_control = {'strategy': 'timed' if self.timed else 'adaptive' if self.adaptive else 'fixed', 'direction': action,
-                              'pulses': 0, 'lastPulseMs': None, 'responseInchesPerSecond': None}
+                              'pulses': 0, 'lastPulseMs': None, 'responseInchesPerSecond': None,
+                              'phase': 'starting', 'lastTravelInches': None, 'actualPulseMs': None}
         threading.Thread(target=self._move, args=(job, counts, distance, stop_after_jog), daemon=True).start()
         return 202, self.snapshot()
 
@@ -639,6 +817,8 @@ class PulleyAxis:
             return
         self.active = None
         self.outcome, self.message = 'error', message
+        if self.pulse_control:
+            self.pulse_control['phase'] = 'error'
         try:
             self.winch.release()
         finally:
@@ -647,7 +827,7 @@ class PulleyAxis:
 
     def _move(self, job, start, distance, stop_after_jog):
         began = time.monotonic()
-        pulse_from = feedback_after = None
+        pulse_from = settling = None
         pulse_on_at = None
         misses = 0
         rearm = False
@@ -658,6 +838,7 @@ class PulleyAxis:
         if self.timed:
             response.rate = self.timed_speed / 1000
         tolerance = Y_TARGET_TOLERANCE_INCHES * PULLEY_COUNTS / self.travel
+        progress_counts = max(3, math.ceil(Y_MIN_PROGRESS_INCHES * PULLEY_COUNTS / self.travel))
         try:
             while True:
                 with self.lock:
@@ -680,7 +861,7 @@ class PulleyAxis:
                         self.stop('Y encoder moved opposite the requested motion.', disarm=True)
                         return
 
-                    if pulse_from is not None and feedback_after is None:
+                    if pulse_from is not None and settling is None:
                         if remaining <= tolerance and self.winch.action() == action:
                             self.winch.release()
                         if not self.winch.busy():
@@ -688,27 +869,37 @@ class PulleyAxis:
                                 if not self.winch.pulse('stop'):
                                     raise RuntimeError('Could not send Stop after the winch jog.')
                                 rearm = True
+                                self.pulse_control['phase'] = 'stopping'
                             else:
-                                feedback_after = now + profile.settle_seconds
-                    elif feedback_after is not None and reading.received >= feedback_after:
-                        advanced = (count - pulse_from) * job.direction
-                        on_ms = abs(self.winch.motion_seconds() - pulse_on_at) * 1000
-                        if not self.timed and adaptive:
-                            response.observe(advanced * self.travel / PULLEY_COUNTS if advanced >= 3 else 0, on_ms)
-                        else:
-                            response.progress = advanced >= 3
-                        self.pulse_control['responseInchesPerSecond'] = round(response.rate * 1000, 3) if response.rate else None
-                        if remaining <= tolerance:
-                            self._complete(remaining, count)
+                                settling = PulseSettling(count, now, profile.settle_seconds, progress_counts)
+                                self.pulse_control['phase'] = 'settling'
+                    elif settling is not None:
+                        if settling.ready(count, reading.received):
+                            advanced = (count - pulse_from) * job.direction
+                            on_ms = abs(self.winch.motion_seconds() - pulse_on_at) * 1000
+                            if not self.timed and adaptive:
+                                response.observe(advanced * self.travel / PULLEY_COUNTS if advanced >= progress_counts else 0, on_ms)
+                            else:
+                                response.progress = advanced >= progress_counts
+                            self.pulse_control.update(
+                                responseInchesPerSecond=round(response.rate * 1000, 3) if response.rate else None,
+                                lastTravelInches=round(advanced * self.travel / PULLEY_COUNTS, 4),
+                                actualPulseMs=round(on_ms, 1))
+                            if remaining <= tolerance:
+                                self._complete(remaining, count)
+                                return
+                            misses = misses + 1 if advanced < progress_counts else 0
+                            if misses >= 2:
+                                self.stop('Y stopped without pulley progress.', disarm=True)
+                                return
+                            if rearm and not self.arm():
+                                raise RuntimeError('Could not send Start for the next winch jog.')
+                            pulse_from = settling = None
+                            rearm = False
+                            self.pulse_control['phase'] = 'starting' if stop_after_jog else 'ready'
+                        elif now >= settling.deadline:
+                            self.stop('Y did not settle after the pulse. Check the winch before moving again.', disarm=True)
                             return
-                        misses = misses + 1 if advanced < 3 else 0
-                        if misses >= 2:
-                            self.stop('Y stopped without pulley progress.', disarm=True)
-                            return
-                        if rearm and not self.arm():
-                            raise RuntimeError('Could not send Start for the next winch jog.')
-                        pulse_from = feedback_after = None
-                        rearm = False
                     elif pulse_from is None and not self.winch.busy():
                         if remaining <= tolerance:
                             self._complete(remaining, count)
@@ -719,8 +910,10 @@ class PulleyAxis:
                         if not self.winch.pulse(action, pulse_limit):
                             raise RuntimeError('Winch relay is busy.')
                         pulse_from = count
-                        self.pulse_control.update(pulses=self.pulse_control['pulses'] + 1, lastPulseMs=pulse_limit)
-                        self.message = f'Moving Y {action} · adjusting pulse {self.pulse_control["pulses"]} to measured travel.'
+                        reason = response.reason if adaptive else 'fixed pulse'
+                        self.pulse_control.update(pulses=self.pulse_control['pulses'] + 1, lastPulseMs=pulse_limit,
+                                                  phase='pulsing', reason=reason)
+                        self.message = f'Moving Y {action} · pulse {self.pulse_control["pulses"]}: {pulse_limit} ms ({reason}).'
                 time.sleep(0.02)
         except (OSError, RuntimeError) as error:
             with self.lock:
@@ -728,6 +921,8 @@ class PulleyAxis:
                     self.stop(str(error), disarm=True)
 
     def _complete(self, remaining, count):
+        if self.pulse_control:
+            self.pulse_control['phase'] = 'done'
         if remaining < -Y_TARGET_TOLERANCE_INCHES * PULLEY_COUNTS / self.travel:
             overshoot = -remaining * self.travel / PULLEY_COUNTS
             position = count * self.travel / PULLEY_COUNTS

@@ -11,7 +11,7 @@ test -x /usr/sbin/dnsmasq
 ip -o -4 address show dev eth0 | grep -q '192\.168\.2\.4/24 '
 
 install -d -m 755 /opt/brick-mapper/app /etc/brick-mapper/dhcp.d
-install -m 644 "$BLUE_SOURCE"/pi/{agent.py,winch.py,x_axis.py,outrigger.py} /opt/blueteam-network/
+install -m 644 "$BLUE_SOURCE"/pi/{agent.py,winch.py,x_axis.py,outrigger.py,stepper.py} /opt/blueteam-network/
 if ! test -e /etc/brick-mapper/x-axis.json; then
     install -m 644 "$BLUE_SOURCE/pi/x-axis.json" /etc/brick-mapper/x-axis.json
 fi
@@ -22,6 +22,18 @@ SupplementaryGroups=dialout
 StateDirectory=brick-mapper-outrigger
 StateDirectoryMode=0750
 EOF
+case "${2:-}" in
+    --stepper-axes)
+        cat > /etc/systemd/system/blueteam-network.service.d/stepper-axes.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/python3 -E -s /opt/blueteam-network/agent.py --role roof --token-file /opt/blueteam-network/network.key --stepper-axes
+EOF
+        ;;
+    --relay-winch) rm -f /etc/systemd/system/blueteam-network.service.d/stepper-axes.conf ;;
+    '') ;; # Preserve the selected drive mode when updating the app.
+    *) echo 'Use --stepper-axes or --relay-winch' >&2; exit 1 ;;
+esac
 touch /etc/brick-mapper/outrigger
 install -m 644 "$BLUE_SOURCE"/app/*.py "$BLUE_SOURCE"/app/*.js "$BLUE_SOURCE"/app/*.html /opt/brick-mapper/app/
 

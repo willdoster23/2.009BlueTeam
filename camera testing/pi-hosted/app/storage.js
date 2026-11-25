@@ -144,6 +144,35 @@
     return transact('readwrite', store => store.put(value, 'reference'), 'mapping');
   }
 
+  function route() {
+    return transact('readonly', (store, done) => {
+      const request = store.get('route');
+      request.onsuccess = () => done(request.result);
+    }, 'mapping');
+  }
+
+  function saveRoute(value) {
+    if (!validRoute(value)) throw new Error('Use valid route coverage and spacing.');
+    return transact('readwrite', store => store.put(value, 'route'), 'mapping');
+  }
+
+  function validRoute(value) {
+    const fields = value?.inputs;
+    if (value?.version !== 1 || typeof value.hardware !== 'boolean'
+        || !['center', 'edge'].includes(value.zone) || !fields
+        || !['count', 'limit'].includes(fields.routeCoverage)
+        || (fields.routeDirection !== undefined && !['left', 'right'].includes(fields.routeDirection))) return false;
+    const rows = Number(fields.routeRows), columns = Number(fields.routeColumns);
+    const spacing = text => text !== '' && Number.isFinite(Number(text)) && Number(text) >= .1 && Number(text) <= 24;
+    const limit = fields.routeYLimit;
+    return (fields.routeCoverage === 'limit' || (Number.isSafeInteger(rows) && rows >= 1))
+      && Number.isInteger(columns) && columns >= 1 && columns <= 12
+      && spacing(fields.routeYSpacing) && (columns === 1 || spacing(fields.routeXSpacing))
+      && ['routeRows', 'routeColumns', 'routeXSpacing', 'routeYSpacing', 'routeYLimit'].every(key => typeof fields[key] === 'string')
+      && (limit === '' ? !value.hardware && fields.routeCoverage === 'count'
+        : Number.isFinite(Number(limit)) && Number(limit) >= 0);
+  }
+
   function reserveTap(brick, zone) {
     return transact('readwrite', (store, done) => {
       const key = `tap:${brickKey(brick)}:${zone}`;
@@ -174,11 +203,13 @@
     return {name, record: view(record)};
   }
 
-  function positionMetadata({xInches, yInches, source, yZeroed, yMoveNote}) {
+  function positionMetadata({xInches, yInches, xZeroInches, source, yZeroed, yMoveNote, xEstimated}) {
     if (![xInches, yInches].every(Number.isFinite)) return {};
     return {x_inches: xInches, y_inches: yInches, y_zeroed: yZeroed === true,
+      x_estimated: xEstimated === true || source === 'outrigger-stepper-x-pulley-y',
+      ...(Number.isFinite(xZeroInches) ? {x_zero_inches: xZeroInches} : {}),
       ...(typeof yMoveNote === 'string' && yMoveNote ? {notes: yMoveNote} : {}),
-      position_source: ['x-encoder-rooftop', 'outrigger-encoders', 'outrigger-timed'].includes(source) ? source : 'simulated-rooftop'};
+      position_source: ['x-encoder-rooftop', 'outrigger-encoders', 'outrigger-timed', 'outrigger-stepper-x-pulley-y'].includes(source) ? source : 'simulated-rooftop'};
   }
 
   async function updatePhoto(photoId, changes, ifNoAnalysis = false) {
@@ -186,7 +217,8 @@
       const request = store.get(photoId);
       request.onsuccess = () => {
         if (!request.result) return;
-        if (ifNoAnalysis && request.result.tap_analysis) {
+        if (ifNoAnalysis && request.result.tap_analysis &&
+            request.result.tap_analysis.algorithm === changes.tap_analysis?.algorithm) {
           done(request.result);
           return;
         }
@@ -339,7 +371,7 @@
     }, 'mapping');
     return {format: 'blue-team-brick-map', version: 2, coordinate_units: 'encoder counts', photos,
       recordings: await listRecordings(),
-      wall_reference: await reference(), tap_reservations: keys.filter(key => key.startsWith('tap:')),
+      wall_reference: await reference(), inspection_route: await route(), tap_reservations: keys.filter(key => key.startsWith('tap:')),
       tap_baseline: window.brickTapAnalysis?.baseline()};
   }
 
@@ -377,12 +409,13 @@
         ...(validZone(photo.tap_zone) ? {tap_zone: photo.tap_zone} : {}),
         ...(validPoint(photo.tap_point) ? {tap_point: photo.tap_point} : {}),
         ...(validCrop(photo.brick_crop) ? {brick_crop: photo.brick_crop} : {}),
-        ...(burst && window.brickTapAnalysis?.validAnalysis(photo.tap_analysis) ? {tap_analysis: photo.tap_analysis} : {}),
+        ...(burst && window.brickTapAnalysis?.validAnalysis(photo.tap_analysis, true) ? {tap_analysis: photo.tap_analysis} : {}),
         ...positionMetadata({xInches: photo.x_inches, yInches: photo.y_inches,
+          xZeroInches: photo.x_zero_inches, xEstimated: photo.x_estimated,
           source: photo.position_source, yZeroed: photo.y_zeroed}),
         notes: typeof photo.notes === 'string' ? photo.notes.slice(0, 2000) : '',
         flagged: photo.flagged === true, simulated: photo.simulated === true,
-        position_source: ['simulated-rooftop', 'x-encoder-rooftop', 'outrigger-encoders', 'outrigger-timed'].includes(photo.position_source)
+        position_source: ['simulated-rooftop', 'x-encoder-rooftop', 'outrigger-encoders', 'outrigger-timed', 'outrigger-stepper-x-pulley-y'].includes(photo.position_source)
           ? photo.position_source : 'manual',
         classification_source: ['tap-review', 'pending'].includes(photo.classification_source)
           ? photo.classification_source : 'manual',
@@ -406,9 +439,15 @@
       }
       const ref = data.wall_reference;
       if (ref && [ref.x, ref.y, ref.xStep, ref.yStep, ref.yZero].every(Number.isFinite)
-          && [ref.xStep, ref.yStep].every(step => step >= 0.1 && step <= 24) && typeof ref.bootId === 'string') {
+          && [ref.xStep, ref.yStep].every(step => step >= 0.1 && step <= 24) && typeof ref.bootId === 'string'
+          && (ref.xZero === undefined || Number.isFinite(ref.xZero))
+          && (ref.xEpoch === undefined || (typeof ref.xEpoch === 'string' && ref.xEpoch.length <= 64))) {
         const request = mapping.getKey('reference');
         request.onsuccess = () => { if (request.result === undefined) mapping.put(ref, 'reference'); };
+      }
+      if (validRoute(data.inspection_route)) {
+        const request = mapping.getKey('route');
+        request.onsuccess = () => { if (request.result === undefined) mapping.put(data.inspection_route, 'route'); };
       }
       for (const record of records) {
         if (record.brick && record.tap_zone) mapping.put(true, `tap:${brickKey(record.brick)}:${record.tap_zone}`);
@@ -424,6 +463,6 @@
 
   window.brickStorage = {id, jobKey, assertCurrentJob, clearJob, save, positionMetadata, label, updateTapAnalysis,
     saveRecording, listRecordings,
-    brickKey, reference, saveReference, reserveTap, releaseTap, updatePhotoGuide, download, exportPhotos, backup, restore, audioPlayer, clearAudio, showTapRecordings,
+    brickKey, reference, saveReference, route, saveRoute, validRoute, reserveTap, releaseTap, updatePhotoGuide, download, exportPhotos, backup, restore, audioPlayer, clearAudio, showTapRecordings,
     list: async () => (await all()).sort((a, b) => a.captured_at.localeCompare(b.captured_at)).map(view)};
 })();

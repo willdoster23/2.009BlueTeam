@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stepper Bench</title>
+<style>
+:root{font:16px system-ui,sans-serif;color:#e8edf6;background:#101722;color-scheme:dark}*{box-sizing:border-box}body{margin:0 auto;max-width:1150px;padding:24px}header{display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-size:30px;margin:0}h2{font-size:18px;margin:0 0 16px}p{line-height:1.5}.muted,small{color:#a5b3c9}small{display:block;line-height:1.5}.notice{padding:12px 16px;border-left:4px solid #49a2ff;background:#18273a;border-radius:6px;margin:18px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{background:#192332;border:1px solid #2c3b50;padding:20px;border-radius:12px}.row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}label{display:block;font-size:14px;color:#bdc9dc;flex:1;min-width:125px}input,select{display:block;width:100%;margin:6px 0 12px;padding:10px;background:#101925;color:#fff;border:1px solid #4b5d76;border-radius:6px;font:inherit}button,.link{cursor:pointer;border:1px solid #50617a;background:#26394f;color:#fff;border-radius:7px;padding:11px 16px;font:600 15px system-ui;text-decoration:none;display:inline-block}button:disabled{opacity:.4;cursor:not-allowed}.primary{background:#1762a7;border-color:#2788e3}.stop{background:#ac2838;border-color:#fa6c7c;font-size:18px;padding:16px 26px}.moves button{flex:1;min-height:56px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:16px 0}.number{font-size:28px;font-weight:650;font-variant-numeric:tabular-nums;margin:8px 0}.badge{display:inline-block;border-radius:20px;padding:6px 12px;background:#3d4859;font-weight:600}.good{background:#14573f}.bad{background:#7e2733}#message{min-height:28px;color:#ffb5bb;white-space:pre-wrap}.check{display:flex;align-items:center;gap:8px;margin:12px 0}.check input{width:auto;margin:0}canvas{width:100%;height:180px;background:#111b29;border-radius:8px}details{margin-top:16px}summary{cursor:pointer;font-weight:600}.wide{grid-column:1/-1}.events{font:13px ui-monospace,monospace;line-height:1.7;max-height:180px;overflow:auto}.inline{display:inline}footer{margin-top:22px}a{color:#8bc7ff}hr{border:0;border-top:1px solid #34465e;margin:20px 0}@media(max-width:750px){.grid,.stats{grid-template-columns:1fr}header{align-items:start;flex-direction:column}.stop{width:100%}body{padding:15px}.number{font-size:25px}}
+.moves .estop{background:#d41422;border:3px solid #ff8790;color:#fff;font-size:28px;font-weight:850;min-height:88px;min-width:210px;padding:16px 28px}.estop small{color:#fff;font-size:12px;font-weight:600;margin-top:4px}
+</style>
+<header><div><h1>Stepper Bench</h1><p class="muted">Nano Every · D9 STEP / D8 DIR · HBS86H</p></div><button id="stop" class="stop">STOP PULSES · Esc</button></header>
+<div class="notice">Start with the motor secured and unloaded. Stop ends step pulses; it leaves the driver enabled. Holding a suspended load still requires the mechanical brake/restraint.</div>
+<div id="message" role="alert"></div>
+<div class="grid">
+ <section class="card"><h2>1 · Connect the motor Nano</h2><label>USB board<select id="motorPort" aria-label="Motor Nano USB port"></select></label><div class="row"><button id="refresh">Refresh USB list</button><button id="connect" class="primary">Connect Nano</button><button id="disconnect">Disconnect</button></div><p><span id="connection" class="badge">Disconnected</span> <span id="motion" class="badge">Disarmed</span></p><small id="identity">The existing X and Y boards are preserved. Connection never starts a move.</small></section>
+ <section class="card"><h2>2 · Match your hardware</h2><div class="row"><label>Driver pulses / revolution<input id="ppr" type="number" min="200" max="51200" step="1" value="1600"></label><label>Effective drum diameter (in)<input id="diameter" type="number" min="0.1" max="24" step="0.01" value="4"></label></div><small><b>1600 and 4 inches are editable assumptions.</b> Match pulses/rev to the actual driver DIP table. Diameter is only used for estimated cable travel; verify it before inch moves.</small></section>
+ <section class="card wide"><h2>3 · Make a move</h2><div class="row"><label>Amount<input id="distance" type="number" min="0.0001" step="0.001" value="0.125"></label><label>Unit<select id="unit"><option value="turns">Motor revolutions</option><option value="inches">Estimated cable inches</option></select></label><label>Speed (RPM)<input id="rpm" type="number" min="0.1" max="60" step="0.1" value="3"></label><label>Acceleration (RPM / second)<input id="accel" type="number" min="0.1" max="120" step="0.1" value="10"></label></div><div class="row"><button id="arm" class="primary">Arm motor</button><button id="zero">Zero commanded position</button><a class="link" href="/log.csv" download="stepper-bench.csv">Download test log</a></div><div class="row moves" style="margin-top:14px"><button id="positive" class="primary">Move positive</button><button id="negative" class="primary">Move negative</button><button id="estop" class="estop" aria-label="E-STOP — stop pulses and disarm">E-STOP<small>Stop pulses + disarm</small></button></div><small style="margin-top:12px">First test: 0.125 revolution at 3 RPM. Determine which direction lifts before using a load. Each move stops at its pulse count. Changing browser tabs, loss of USB, or loss of page heartbeat stops and disarms the controller.</small></section>
+</div>
+<div class="stats">
+ <section class="card"><small>Commanded pulse position</small><div class="number" id="steps">—</div><small id="remaining">No motion requested</small></section>
+ <section class="card"><small>Commanded turns / estimated cable travel</small><div class="number" id="turns">—</div><small id="inches">An estimate from pulse count, not encoder feedback</small></section>
+ <section class="card"><small>External encoder measurement</small><div class="number" id="encoderValue">Not connected</div><small id="encoderNote">The motor encoder feeds the HBS86H internally. STEP/DIR does not return its position.</small></section>
+</div>
+<div class="grid">
+ <section class="card"><h2>External Y encoder · optional, ready for later</h2><label>Existing Y encoder USB board<select id="encoderPort" aria-label="External Y encoder USB port"></select></label><div class="row"><button id="encoderConnect">Connect encoder</button><button id="encoderDisconnect">Disconnect encoder</button></div><div class="row" style="margin-top:16px"><label>Measured travel / encoder revolution (in)<input id="travelPerRev" type="number" min="0.001" max="1000" step="0.001" placeholder="Leave empty for turns only"></label><label>Encoder sign<select id="encoderSign"><option value="1">Normal</option><option value="-1">Reversed</option></select></label></div><button id="encoderZero">Zero external encoder</button><label class="check"><input id="requireEncoder" type="checkbox">Stop a move if external encoder feedback is lost</label><small>Plug the existing Y Nano Every into this Mac by USB. Keep its AS5048A wiring and firmware. Its 4096-count/revolution reports are read separately; nothing is flashed to it. Feedback monitoring checks signal freshness, not automatic distance correction.</small></section>
+ <section class="card"><h2>Driver feedback · optional wiring</h2><small>With power off: <b>ALM+ → D2, ALM− → GND; PEND+ → D3, PEND− → GND.</b> These isolated outputs use the Nano's internal 5 V pull-ups. Do not connect an external 24 V pull-up to these Nano inputs.</small><p id="driverSignals">Raw ALM: — · raw PEND: —</p><label>Alarm interpretation<select id="alarmMode"><option value="0">Not wired / not verified — no alarm interlock</option><option value="1">HIGH means fault (verify first)</option><option value="2">LOW means fault (verify first)</option></select></label><button id="applyAlarm">Apply while disarmed</button><small>Driver variants differ. Verify normal and fault levels before enabling this interlock. PEND is displayed as a raw input until its polarity is verified. Neither signal supplies the raw motor encoder count.</small></section>
+ <section class="card wide"><h2>Recent position trace</h2><small id="plotLabel">Blue: commanded motor turns. External measurements appear only after their travel calibration is entered.</small><canvas id="plot" aria-label="Recent position trace"></canvas><details><summary>Controller events</summary><div class="events" id="events"></div></details></section>
+</div>
+<footer><small>No automatic move runs on page load, connection, reset or reconnect. If Stop has been used, click Arm before the next move. Disconnecting power removes the motor's holding torque.</small></footer>
+<script>
+'use strict';
+const TOKEN='__TOKEN__', $=id=>document.getElementById(id);
+let state={}, busy=false, polling=false, history=[], lastSeq=null;
+const message=text=>{$('message').textContent=text||'';};
+async function api(path,data={}){
+ const r=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Bench-Token':TOKEN},body:JSON.stringify(data)});
+ const body=await r.json(); if(!r.ok)throw Error(body.error||'Request failed'); return body;
+}
+async function action(fn){if(busy)return;busy=true;render();message('');try{await fn();await poll();}catch(e){message(e.message);}finally{busy=false;render();}}
+async function stop(){try{await api('stop');message('Stopped and disarmed. Driver holding current remains enabled.');}catch(e){message('Stop request could not reach the controller. Its communication timeout will stop pulses.');}finally{await poll();}}
+async function refresh(){
+ const r=await fetch('/api/ports'); const list=await r.json();
+ for(const [id,encoder] of [['motorPort',false],['encoderPort',true]]){
+  const select=$(id), previous=select.value; select.replaceChildren();
+  for(const p of list){
+   if((!encoder&&!p.nano)||(encoder&&p.benchMotor))continue;
+   const o=document.createElement('option');o.value=p.port;
+   o.textContent=`${p.description} · ${p.role||p.serial||p.port} · ${p.port}`;
+   o.disabled=encoder?p.role==='Existing X controller':Boolean(p.role);
+   select.append(o);
+  }
+  if([...select.options].some(o=>o.value===previous&&!o.disabled))select.value=previous;
+  else {const candidate=[...select.options].find(o=>!o.disabled&&(encoder?o.text.includes('Existing Y encoder'):true));if(candidate)select.value=candidate.value;}
+ }
+}
+function render(){
+ const ready=state.connected&&state.fresh, moving=Boolean(state.moving), armed=ready&&state.armed;
+ $('connection').textContent=ready?'Nano connected':state.connected?'Telemetry stale':'Disconnected';
+ $('connection').className='badge '+(ready?'good':'');
+ $('motion').textContent=moving?'Moving':armed?'Armed':`Disarmed${state.reason&&state.reason!=='disconnected'?' · '+state.reason:''}`;
+ $('motion').className='badge '+(moving?'good':state.reason==='alarm'?'bad':'');
+ $('arm').disabled=busy||!ready||moving||armed;
+ $('positive').disabled=$('negative').disabled=busy||!armed||moving;
+ $('zero').disabled=busy||!ready||moving;
+ $('connect').disabled=busy||Boolean(state.connected)||!$('motorPort').value;
+ $('disconnect').disabled=busy||!state.connected;
+ $('applyAlarm').disabled=busy||!ready||moving||armed;
+ $('encoderZero').disabled=busy||moving||!state.encoder?.valid;
+ $('encoderConnect').disabled=busy||moving||!$('encoderPort').value||$('encoderPort').value===state.port;
+ $('encoderDisconnect').disabled=busy||!state.encoder?.connected;
+ for(const id of ['ppr','diameter','distance','unit','rpm','accel','requireEncoder'])$(id).disabled=moving||busy;
+ $('steps').textContent=ready?Number(state.steps).toLocaleString():'—';
+ $('remaining').textContent=ready?`${state.remaining??0} pulses remaining · ${(state.rate??0).toFixed(1)} pulses/s`:'No fresh motor telemetry';
+ $('turns').textContent=state.commandedTurns===undefined?'—':`${state.commandedTurns.toFixed(4)} turns`;
+ $('inches').textContent=state.estimatedInches===undefined?'An estimate from pulse count, not encoder feedback':`${state.estimatedInches.toFixed(3)} estimated inches · assumes configured drum diameter`;
+ if(ready)$('identity').textContent=`Motor board: ${state.boardSerial}. D9 STEP / D8 DIR. USB status age ${state.ageMs} ms.`;
+ const enc=state.encoder||{};
+ $('encoderValue').textContent=!enc.connected?'Not connected':!enc.valid?'No valid signal':!enc.zeroed?'Zero required':enc.inches==null?`${enc.turns.toFixed(4)} turns`:`${enc.inches.toFixed(3)} measured in`;
+ $('encoderNote').textContent=enc.connected?`External count ${enc.counts??'—'} · age ${enc.ageMs??'—'} ms. ${enc.zeroed?'Independent measured position.':'Zero after a connection or signal/reference reset.'}`:'The motor encoder feeds the HBS86H internally. STEP/DIR does not return its position.';
+ $('driverSignals').textContent=ready?`Raw ALM (D2): ${state.alarmRaw?'HIGH':'LOW'} · raw PEND (D3): ${state.pendRaw?'HIGH':'LOW'} · alarm interlock: ${state.alarmMode?'configured':'off'}`:'Raw ALM: — · raw PEND: —';
+ $('events').replaceChildren(...(state.events||[]).slice().reverse().map(e=>{const d=document.createElement('div');d.textContent=e.time+'  '+e.message;return d;}));
+ if(state.error)message(state.error);
+}
+async function poll(){
+ if(polling)return;polling=true;
+ try{const r=await fetch('/api/state');if(!r.ok)throw Error('Controller unavailable');state=await r.json();
+  if(state.sequence!==lastSeq){lastSeq=state.sequence;history.push({cmd:state.commandedTurns,estimated:state.estimatedInches,actual:state.encoder?.zeroed?state.encoder.inches:null});history=history.slice(-400);}
+  render();draw();
+ }catch(e){state={};render();message('Local controller is unavailable. Reopen Start Stepper Bench.');}finally{polling=false;}
+}
+function draw(){
+ const canvas=$('plot'), ctx=canvas.getContext('2d'), ratio=devicePixelRatio||1;
+ const w=canvas.clientWidth,h=canvas.clientHeight;canvas.width=w*ratio;canvas.height=h*ratio;ctx.scale(ratio,ratio);
+ const measured=history.some(p=>p.actual!=null), a=history.map(p=>measured?p.estimated:p.cmd), b=history.map(p=>measured?p.actual:null);
+ $('plotLabel').textContent=measured?'Blue: estimated cable inches from pulses. Green: independent external encoder inches.':'Blue: commanded motor turns. This trace is not an encoder measurement.';
+ const values=[...a,...b].filter(v=>v!=null&&Number.isFinite(v));if(!values.length)return;
+ let lo=Math.min(...values),hi=Math.max(...values);if(hi-lo<.02){lo-=.01;hi+=.01;}
+ const y=v=>h-20-(v-lo)/(hi-lo)*(h-40);ctx.strokeStyle='#34465e';ctx.beginPath();ctx.moveTo(40,15);ctx.lineTo(40,h-20);ctx.lineTo(w-10,h-20);ctx.stroke();
+ ctx.fillStyle='#a5b3c9';ctx.font='12px system-ui';ctx.fillText(hi.toFixed(2),2,20);ctx.fillText(lo.toFixed(2),2,h-17);
+ for(const [line,color] of [[a,'#55adff'],[b,'#56d5a0']]){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();let pen=false;line.forEach((v,i)=>{if(v==null){pen=false;return;}const x=43+i/Math.max(1,line.length-1)*(w-56);if(pen)ctx.lineTo(x,y(v));else ctx.moveTo(x,y(v));pen=true;});ctx.stroke();}
+}
+function move(direction){return action(()=>api('move',{direction,ppr:Number($('ppr').value),diameter:Number($('diameter').value),distance:Number($('distance').value),unit:$('unit').value,rpm:Number($('rpm').value),accel:Number($('accel').value),requireEncoder:$('requireEncoder').checked}));}
+$('stop').onclick=$('estop').onclick=stop;document.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();stop();}});
+$('refresh').onclick=()=>action(refresh);
+$('connect').onclick=()=>action(()=>api('connect',{port:$('motorPort').value}));
+$('disconnect').onclick=()=>action(()=>api('disconnect'));
+$('arm').onclick=()=>action(async()=>{await api('heartbeat');await api('arm');});
+$('positive').onclick=()=>move(1);$('negative').onclick=()=>move(-1);
+$('zero').onclick=()=>action(()=>api('zero'));
+$('applyAlarm').onclick=()=>action(()=>api('alarm',{mode:Number($('alarmMode').value)}));
+$('encoderConnect').onclick=()=>action(()=>api('encoder/connect',{port:$('encoderPort').value}));
+$('encoderDisconnect').onclick=()=>action(()=>api('encoder/disconnect'));
+$('encoderZero').onclick=()=>action(()=>api('encoder/zero',{travelPerRev:$('travelPerRev').value,sign:Number($('encoderSign').value)}));
+setInterval(()=>{if(!document.hidden)api('heartbeat').catch(()=>{});},180);
+setInterval(poll,150);window.addEventListener('resize',draw);
+function leaving(){fetch('/api/stop',{method:'POST',headers:{'Content-Type':'application/json','X-Bench-Token':TOKEN},body:'{}',keepalive:true}).catch(()=>{});}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)leaving();});window.addEventListener('pagehide',leaving);
+refresh().then(poll).catch(e=>message(e.message));
+</script></html>

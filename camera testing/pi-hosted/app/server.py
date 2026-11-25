@@ -116,7 +116,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] in ('/', '/index.html', '/map.html', '/diagnostics.html'):
             html = (ROOT / 'map.html').read_text().replace('__PREVIEW__', str(self.preview).lower())
             return self.respond(200, html.encode(), 'text/html; charset=utf-8')
-        if self.path in ('/player.js', '/dashboard.js', '/storage.js', '/automatic.js', '/pages.js', '/tap-score.js', '/tap-analysis.js'):
+        if self.path in ('/player.js', '/dashboard.js', '/stepper-controls.js', '/storage.js', '/route-preview.js', '/automatic.js', '/pages.js', '/tap-score.js', '/tap-analysis.js'):
             script = (ROOT / self.path[1:]).read_text().replace('__PHOTO_TOKEN__', TOKEN)
             return self.respond(200, script.encode(), 'text/javascript; charset=utf-8')
         if self.path == '/api/app':
@@ -137,7 +137,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/api/poweroff':
             return self.respond(*self.controls.poweroff())
         commands = {'/api/winch': self.controls.command, '/api/tap': self.controls.tap,
-                    '/api/camera': self.controls.camera}
+                    '/api/camera': self.controls.camera, '/api/led': self.controls.led}
         axis_paths = ('/api/x-axis', '/api/y-axis')
         if self.path in commands or self.path in axis_paths:
             try:

@@ -54,6 +54,7 @@ class BenchState:
         self.axis = None
         self.pulley = None
         self.tap = None
+        self.led = None
         self.tap_recording = threading.Lock()
         self.recorded_tap_ids = collections.deque(maxlen=200)
         self.tap_stop_count = 0
@@ -91,17 +92,18 @@ class BenchState:
                 'yAxis': pulley or ({'mode': 'simulation', 'zeroed': self.y_zero is not None,
                           'maxJogInches': Y_MAX_JOG_INCHES} if self.role == 'roof' else None),
                 'relays': {'mode': self.winch_mode,
-                           'ready': self.winch_mode == 'simulation' or self.winch is not None,
-                           'enabled': self.enabled,
+                           'ready': pulley.get('motorConnected', False) if self.winch_mode == 'steppers' else self.winch_mode == 'simulation' or self.winch is not None,
+                           'enabled': pulley.get('motorArmed', False) if self.winch_mode == 'steppers' else self.enabled,
                            'autoArm': self.winch_mode == 'live-four',
                            'motionEpoch': self.motion_epoch,
-                           'busy': self.winch.busy() if self.winch is not None else bool(self.action),
+                           'busy': bool(pulley.get('moving')) if self.winch_mode == 'steppers' else self.winch.busy() if self.winch is not None else bool(self.action),
                            'action': self.action, 'channels': [
                                {'channel': n, 'label': action.capitalize(), 'closed': self.action == action}
-                               for n, action in enumerate(self.channels, 1)]},
+                               for n, action in enumerate(self.channels, 1)] if self.winch_mode != 'steppers' else []},
                 'exchange': dict(self.exchange), 'receivedPackets': self.received,
                 'lastReceived': self.last_received, 'events': list(self.events),
                 'tap': self.tap.status() if self.tap else {'available': False},
+                'led': self.led.status() if self.led else {'available': False},
                 'poweroff': {'available': self.poweroff_available,
                              'scheduled': self.poweroff_scheduled,
                              'robotScheduled': self.robot_poweroff_scheduled},
@@ -110,8 +112,11 @@ class BenchState:
     def position(self, axis, pulley=None):
         if pulley is not None:
             return {'x': axis['counts'], 'y': pulley['counts'], 'xInches': axis['inches'],
+                    'xZeroInches': axis.get('zeroInches', 0),
                     'yInches': pulley['inches'], 'yZeroed': pulley['zeroed'],
-                    'source': 'outrigger-timed' if pulley.get('estimated') else 'outrigger-encoders', 'units': 'encoder counts',
+                    'source': 'outrigger-stepper-x-pulley-y' if axis.get('estimatedFromSteps') else 'outrigger-timed' if pulley.get('estimated') else 'outrigger-encoders',
+                    'units': 'X commanded pulses; Y encoder counts' if axis.get('estimatedFromSteps') else 'encoder counts',
+                    'xEstimated': axis.get('estimatedFromSteps', False),
                     'yMoveNote': pulley['warning']}
         y = round(self.y - (self.y_zero or 0))
         result = {'x': axis['counts'] if axis else round(self.x), 'y': y,
@@ -136,6 +141,11 @@ class BenchState:
 
     def command(self, action, command_id, mode=None, motion_epoch=None):
         with self.lock:
+            if self.winch_mode == 'steppers':
+                if action not in ('start', 'stop'):
+                    return 409, {'error': 'Use the Y stepper distance or motor-turn controls.'}
+                code, result = self.axis_command('y', {'id': command_id, 'action': 'arm' if action == 'start' else 'stop'})
+                return code, {**result, 'message': result.get('message', result.get('error', ''))}
             self.update()
             if self.poweroff_scheduled or self.robot_poweroff_scheduled:
                 return 409, {'error': 'System shutdown is in progress'}
@@ -222,6 +232,8 @@ class BenchState:
             action = payload.get('action')
             controller = self.axis if axis == 'x' else self.pulley
             if controller is not None and action in ('stop', 'renew'):
+                if action == 'stop':
+                    self.motion_epoch = uuid.uuid4().hex
                 if axis == 'x':
                     if action == 'stop' or self.pulley:
                         return self.axis.command(payload)
@@ -388,7 +400,7 @@ class BenchState:
             except (OSError, ValueError, KeyError, http.client.HTTPException):
                 with self.lock:
                     self.exchange.update(connected=False, sent=sequence)
-                    if self.winch_mode != 'live-four':
+                    if self.winch_mode not in ('live-four', 'steppers'):
                         self.update()
                         self.action, self.enabled = None, False
                         if self.winch is not None:
@@ -467,6 +479,13 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(403, {'error': 'Expected rooftop controller'})
                 from camera import request_mode
                 return self.respond(*request_mode(payload))
+            if self.path == '/api/led' and state.role == 'robot':
+                if self.client_address[0] != state.peer:
+                    return self.respond(403, {'error': 'Expected rooftop controller'})
+                with state.lock:
+                    if state.poweroff_scheduled or state.led is None:
+                        return self.respond(503, {'error': 'Robot LED controller is unavailable.'})
+                    return self.respond(*state.led.command(payload))
             if self.path in AXIS_ROUTES and state.role == 'roof':
                 if self.client_address[0] != '127.0.0.1':
                     return self.respond(403, {'error': 'Expected rooftop dashboard'})
@@ -490,6 +509,7 @@ def main():
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--live-winch-up', dest='winch_mode', action='store_const', const='live-up')
     modes.add_argument('--live-winch', dest='winch_mode', action='store_const', const='live-four')
+    modes.add_argument('--stepper-axes', dest='winch_mode', action='store_const', const='steppers')
     parser.set_defaults(winch_mode='simulation')
     parser.add_argument('--token-file', type=Path, required=True)
     args = parser.parse_args()
@@ -500,7 +520,8 @@ def main():
     if args.winch_mode != 'simulation' and args.role != 'roof':
         parser.error('The live winch belongs on the rooftop Pi')
     state = BenchState(args.role, address, peer, token, args.winch_mode)
-    serial_out = args.role == 'roof' and args.winch_mode == 'live-four' and Path('/etc/brick-mapper/outrigger').is_file()
+    serial_out = args.role == 'roof' and (args.winch_mode == 'steppers' or
+        args.winch_mode == 'live-four' and Path('/etc/brick-mapper/outrigger').is_file())
     if args.role == 'roof' and not serial_out:
         from winch import FOUR_CHANNEL_PINS
         from x_axis import CONFIG, XAxis
@@ -511,7 +532,13 @@ def main():
             state.tap = TapController()
         except OSError as error:
             print(f'Tap unavailable: {error}', flush=True)
-    if args.winch_mode != 'simulation':
+    if args.role == 'robot':
+        from led import LedController
+        try:
+            state.led = LedController()
+        except Exception as error:
+            print(f'LED unavailable: {error}', flush=True)
+    if args.winch_mode not in ('simulation', 'steppers'):
         try:
             from winch import FOUR_CHANNEL_PINS, WinchRelays
             pins = {'up': 26} if args.winch_mode == 'live-up' else FOUR_CHANNEL_PINS
@@ -522,10 +549,15 @@ def main():
     if serial_out:
         from outrigger import NanoAxis, PulleyAxis, SerialBoards
         boards = SerialBoards()
-        state.axis = NanoAxis(boards)
-        state.pulley = PulleyAxis(boards, state.winch, state.lock, state.arm_winch, state.disarm_winch)
-    if args.role == 'roof':
-        signal.signal(signal.SIGTERM, stop_service)
+        if args.winch_mode == 'steppers':
+            from stepper import StepperAxis
+            from outrigger import Y_CONFIG
+            state.axis = StepperAxis(boards, state.lock, 'X', Y_CONFIG.with_name('x-reference.json'))
+            state.pulley = StepperAxis(boards, state.lock, 'Y')
+        else:
+            state.axis = NanoAxis(boards)
+            state.pulley = PulleyAxis(boards, state.winch, state.lock, state.arm_winch, state.disarm_winch)
+    signal.signal(signal.SIGTERM, stop_service)
     try:
         with ThreadingHTTPServer((address, 8091), Handler) as server:
             server.state = state
@@ -546,8 +578,12 @@ def main():
                 if boards:
                     boards.close()
             finally:
-                if state.winch is not None:
-                    state.winch.close()
+                try:
+                    if state.winch is not None:
+                        state.winch.close()
+                finally:
+                    if state.led is not None:
+                        state.led.close()
 
 
 if __name__ == '__main__':
